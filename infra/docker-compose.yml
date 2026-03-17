@@ -1,3 +1,10 @@
+# BeGuardit — Local Development Environment
+# Source: ARCH-002-2026-03-17, Section 14.1
+#
+# Usage:
+#   cp ../.env.example ../.env   # then edit values
+#   docker compose up
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,35 +16,64 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bg_dev -d beguardit"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   api:
-    build: ../api
+    build:
+      context: ../api
+      dockerfile: Dockerfile
     command: uvicorn src.main:create_app --factory --reload --host 0.0.0.0 --port 8000
     env_file: ../.env
     ports:
       - "8000:8000"
+    volumes:
+      - ../api/src:/app/src
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker:
-    build: ../worker
+    build:
+      context: ../worker
+      dockerfile: Dockerfile
     command: arq src.main.WorkerSettings
     env_file: ../.env
+    volumes:
+      - ../worker/src:/app/src
+      - report_data:/data/reports
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   portal:
-    build: ../portal
+    build:
+      context: ../portal
+      dockerfile: Dockerfile
     command: npm run dev
     ports:
       - "5173:5173"
+    volumes:
+      - ../portal/src:/app/src
 
 volumes:
   pgdata:
+  report_data:
