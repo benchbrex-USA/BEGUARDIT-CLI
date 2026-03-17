@@ -1,0 +1,9 @@
+arq==0.26.*
+sqlalchemy==2.0.*
+asyncpg
+redis
+jinja2
+structlog
+pydantic-settings
+pytest
+pytest-asyncio

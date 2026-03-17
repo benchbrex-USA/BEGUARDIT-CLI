@@ -1,0 +1,1 @@
+# assessments domain — FastAPI dependencies

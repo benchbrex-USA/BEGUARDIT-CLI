@@ -1,0 +1,14 @@
+fastapi==0.115.*
+uvicorn[standard]
+sqlalchemy==2.0.*
+alembic==1.13.*
+asyncpg
+pydantic-settings
+argon2-cffi
+arq==0.26.*
+redis
+httpx==0.27.*
+structlog
+ruff
+pytest
+pytest-asyncio

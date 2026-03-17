@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: beguardit
+      POSTGRES_USER: bg_dev
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ../api
+    command: uvicorn src.main:create_app --factory --reload --host 0.0.0.0 --port 8000
+    env_file: ../.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: ../worker
+    command: arq src.main.WorkerSettings
+    env_file: ../.env
+    depends_on:
+      - postgres
+      - redis
+
+  portal:
+    build: ../portal
+    command: npm run dev
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:

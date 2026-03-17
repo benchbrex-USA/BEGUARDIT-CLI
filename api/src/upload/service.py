@@ -1,0 +1,1 @@
+# Upload domain — business logic

@@ -1,0 +1,1 @@
+# Worker configuration — DATABASE_URL, REDIS_URL, REPORT_STORAGE_PATH, LOG_LEVEL

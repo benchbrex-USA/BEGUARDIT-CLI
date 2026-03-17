@@ -1,0 +1,32 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-sign-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build CLI artifacts (macOS arm64/x64, Linux x64/arm64, Windows x64)
+        run: echo "TODO: cross-compile via pkg or similar"
+      - name: SHA-256 checksums
+        run: sha256sum dist/* > CHECKSUMS.txt
+      - name: Sign CHECKSUMS.txt with Ed25519
+        run: |
+          echo "${{ secrets.RELEASE_SIGNING_KEY }}" > signing.key
+          openssl pkeyutl -sign -inkey signing.key -rawin -in CHECKSUMS.txt -out CHECKSUMS.txt.sig
+          rm signing.key
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+            CHECKSUMS.txt
+            CHECKSUMS.txt.sig
+            pub.pem

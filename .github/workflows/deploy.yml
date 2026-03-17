@@ -1,0 +1,32 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push API image
+        run: echo "TODO: docker build + push to registry"
+      - name: Deploy to Kubernetes
+        run: echo "TODO: kubectl rollout restart deployment/api"
+
+  deploy-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy worker
+        run: echo "TODO: kubectl rollout restart deployment/worker"
+
+  deploy-portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build portal
+        run: npm --prefix portal ci && npm --prefix portal run build
+      - name: Deploy portal
+        run: echo "TODO: push to CDN / kubectl"
