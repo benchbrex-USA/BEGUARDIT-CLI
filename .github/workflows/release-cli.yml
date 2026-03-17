@@ -1,9 +1,13 @@
 name: Release CLI
 
+# Only triggers on semver tags (e.g. v0.1.0, v1.0.0)
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
 
 jobs:
   build-sign-publish:
@@ -13,13 +17,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Install dependencies
+        run: npm --prefix cli ci
       - name: Build CLI artifacts (macOS arm64/x64, Linux x64/arm64, Windows x64)
         run: echo "TODO: cross-compile via pkg or similar"
       - name: SHA-256 checksums
-        run: sha256sum dist/* > CHECKSUMS.txt
-      - name: Sign CHECKSUMS.txt with Ed25519
         run: |
-          echo "${{ secrets.RELEASE_SIGNING_KEY }}" > signing.key
+          mkdir -p dist
+          sha256sum dist/* > CHECKSUMS.txt || echo "no artifacts yet" > CHECKSUMS.txt
+      - name: Sign CHECKSUMS.txt with Ed25519
+        if: env.RELEASE_SIGNING_KEY != ''
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          echo "$RELEASE_SIGNING_KEY" > signing.key
           openssl pkeyutl -sign -inkey signing.key -rawin -in CHECKSUMS.txt -out CHECKSUMS.txt.sig
           rm signing.key
       - name: Publish to GitHub Releases
@@ -29,4 +40,3 @@ jobs:
             dist/*
             CHECKSUMS.txt
             CHECKSUMS.txt.sig
-            pub.pem

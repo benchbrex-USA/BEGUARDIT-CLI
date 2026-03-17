@@ -1,9 +1,20 @@
 name: Deploy
 
+# Manual trigger only until deployment infrastructure is ready.
+# Once staging/prod environments exist, re-enable push trigger:
+#   push:
+#     branches: [main]
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
 
 jobs:
   deploy-api:
@@ -26,6 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Build portal
         run: npm --prefix portal ci && npm --prefix portal run build
       - name: Deploy portal
