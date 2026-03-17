@@ -52,11 +52,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 
 class TenantScopingMiddleware(BaseHTTPMiddleware):
-    """Extract tenant_id from the authenticated session and inject into request.state.
+    """Extract tenant_id from the session cookie and inject into request.state.
 
-    Skips unauthenticated paths (auth/register, auth/login, health, ready).
-    Actual session lookup happens in auth dependencies; this middleware just
-    initialises request.state placeholders so downstream code can rely on them.
+    For authenticated requests the middleware reads the ``bg_session`` cookie,
+    hashes it with SHA-256, and looks it up in the ``sessions`` table.  If the
+    session is valid and not expired, ``request.state.tenant_id`` and
+    ``request.state.user_id`` are populated so that downstream handlers and
+    dependencies can rely on them without an extra DB round-trip.
+
+    Unauthenticated paths are skipped — only the placeholder attributes are
+    initialised so code never hits ``AttributeError``.
     """
 
     SKIP_PATHS = frozenset({
@@ -67,15 +72,44 @@ class TenantScopingMiddleware(BaseHTTPMiddleware):
     })
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Always initialise state so downstream code can reference safely
         request.state.user = None
+        request.state.user_id = None
         request.state.tenant_id = None
 
-        if request.url.path not in self.SKIP_PATHS:
-            # Actual tenant resolution is performed by the get_current_tenant
-            # dependency (§8.4) which reads the session cookie, validates it,
-            # and populates request.state.  This middleware only ensures the
-            # attributes exist so downstream code never hits AttributeError.
-            pass
+        path = request.url.path
+
+        if path not in self.SKIP_PATHS:
+            token = request.cookies.get("bg_session")
+            if token:
+                try:
+                    import hashlib
+                    from datetime import datetime, timezone
+
+                    from sqlalchemy import select, text
+
+                    from src.core.database import async_session_factory
+
+                    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+                    async with async_session_factory() as session:
+                        row = (
+                            await session.execute(
+                                text(
+                                    "SELECT user_id, tenant_id, expires_at "
+                                    "FROM sessions WHERE token_hash = :th"
+                                ),
+                                {"th": token_hash},
+                            )
+                        ).first()
+
+                        if row and row.expires_at > datetime.now(timezone.utc):
+                            request.state.user_id = row.user_id
+                            request.state.tenant_id = row.tenant_id
+                except Exception:
+                    # Middleware must never block requests — if the lookup
+                    # fails the auth dependency will raise 401 later.
+                    logger.debug("tenant_scoping_lookup_failed", path=path)
 
         return await call_next(request)
 
