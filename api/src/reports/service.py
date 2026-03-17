@@ -1,1 +1,91 @@
-# reports domain — business logic
+# Reports domain — business logic
+# Source: ARCH-002-2026-03-17, Section 6.4
+from __future__ import annotations
+
+import uuid
+
+import structlog
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.assessments.models import AssessmentSession
+from src.core.exceptions import ForbiddenError, NotFoundError
+from src.reports.models import ReportJob
+
+logger = structlog.get_logger()
+
+
+async def create_report_job(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    session_id: uuid.UUID,
+    format: str = "html",
+) -> ReportJob:
+    """Queue a new report generation job."""
+    # Verify assessment exists and belongs to tenant
+    result = await db.execute(
+        select(AssessmentSession).where(
+            AssessmentSession.id == session_id,
+            AssessmentSession.tenant_id == tenant_id,
+        )
+    )
+    assessment = result.scalar_one_or_none()
+    if not assessment:
+        raise NotFoundError("Assessment not found.")
+
+    if assessment.status == "running":
+        raise ForbiddenError("Cannot generate report for a running assessment.")
+
+    job = ReportJob(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        format=format,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info("report_job_created", job_id=str(job.id), session_id=str(session_id), format=format)
+    return job
+
+
+async def list_report_jobs(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    offset: int = 0,
+    limit: int = 50,
+    session_id: uuid.UUID | None = None,
+) -> tuple[list[ReportJob], int]:
+    """List report jobs for a tenant, optionally filtered by session."""
+    base = select(ReportJob).where(ReportJob.tenant_id == tenant_id)
+    if session_id:
+        base = base.where(ReportJob.session_id == session_id)
+
+    count_q = select(func.count()).select_from(base.subquery())
+    total = (await db.execute(count_q)).scalar_one()
+
+    rows_q = base.order_by(ReportJob.queued_at.desc()).offset(offset).limit(limit)
+    result = await db.execute(rows_q)
+
+    return list(result.scalars().all()), total
+
+
+async def get_report_job(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    job_id: uuid.UUID,
+) -> ReportJob:
+    """Fetch a single report job by ID, scoped to tenant."""
+    result = await db.execute(
+        select(ReportJob).where(
+            ReportJob.id == job_id,
+            ReportJob.tenant_id == tenant_id,
+        )
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise NotFoundError("Report job not found.")
+    return job
