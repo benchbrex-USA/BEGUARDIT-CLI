@@ -2,5 +2,8 @@
   "buildCommand": "cd portal && npm ci && npm run build",
   "outputDirectory": "portal/dist",
   "installCommand": "cd portal && npm ci",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
