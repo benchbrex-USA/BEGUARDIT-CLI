@@ -1,0 +1,133 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Collectors
+description: Reference for all 10 BeGuardit evidence collector plugins.
+---
+
+# Collectors
+
+BeGuardit uses a strategy-pattern plugin system with 10 collectors organized into two categories. Each collector extends `BaseCollector` and produces evidence items and discovered assets.
+
+## Collector Matrix
+
+| Collector | Category | Min Profile | Platforms | Description |
+|-----------|----------|------------|-----------|-------------|
+| `os-info` | cyber | quick | all | OS version, kernel, hostname, uptime |
+| `network` | cyber | standard | all | Interfaces, routes, DNS, open ports |
+| `services` | cyber | standard | all | Running services, listening sockets |
+| `packages` | cyber | standard | all | Installed packages (npm, pip, brew, apt) |
+| `users-auth` | cyber | standard | unix | User accounts, sudo config, SSH keys |
+| `filesystem` | cyber | deep | unix | Permissions, SUID/SGID, world-writable |
+| `ai-runtimes` | ai | quick | all | Python, CUDA, TensorFlow, PyTorch, ONNX |
+| `ai-models` | ai | standard | all | Model files on disk (GGUF, SafeTensors, ONNX) |
+| `ai-prompts` | ai | standard | all | Prompt template files, system prompt leakage |
+| `ai-rag` | ai | standard | all | Vector DBs (Chroma, Pinecone, Weaviate) |
+
+## How Collectors Work
+
+Each collector:
+
+1. Checks `matchesProfile(profile)` — skips if the scan profile is below its minimum
+2. Runs platform-specific commands via `exec(command, timeout)` with a 30-second default timeout
+3. Emits evidence via `this.evidence(type, data)` — structured JSON objects
+4. Discovers assets via `this.asset(type, name, metadata)` — e.g., a running service, an AI model file
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  BaseCollector│────▶│  os-info     │     │  ai-models   │
+│  .exec()     │     │  .collect()  │     │  .collect()  │
+│  .evidence() │     └──────────────┘     └──────────────┘
+│  .asset()    │
+└──────────────┘
+```
+
+## Cyber Collectors
+
+### os-info
+
+Collects operating system details: kernel version, architecture, hostname, uptime, and loaded kernel modules.
+
+**Evidence types:** `os-release`, `kernel-info`, `hostname`, `uptime`
+**Assets:** `operating-system`
+
+### network
+
+Maps network topology: interfaces, IP addresses, routing table, DNS configuration, and open ports (via `ss` or `netstat`).
+
+**Evidence types:** `interfaces`, `routes`, `dns-config`, `open-ports`
+**Assets:** `network-interface`, `dns-server`
+
+### services
+
+Enumerates running services and their listening sockets. Detects service managers (systemd, launchd, Windows Services).
+
+**Evidence types:** `running-services`, `listening-sockets`
+**Assets:** `service`
+
+### packages
+
+Inventories installed packages across multiple package managers: npm global, pip, brew, apt/dpkg, yum/rpm.
+
+**Evidence types:** `npm-packages`, `pip-packages`, `system-packages`
+**Assets:** `package`
+
+### users-auth
+
+Audits user accounts, group memberships, sudo configuration, SSH authorized keys, and password policies.
+
+**Evidence types:** `user-accounts`, `sudo-config`, `ssh-keys`, `password-policy`
+**Assets:** `user-account`, `ssh-key`
+
+### filesystem
+
+Deep filesystem analysis: SUID/SGID binaries, world-writable directories, sensitive file permissions, and temp directory hygiene.
+
+**Evidence types:** `suid-binaries`, `world-writable`, `sensitive-files`, `tmp-permissions`
+**Assets:** `filesystem-path`
+
+## AI Collectors
+
+### ai-runtimes
+
+Detects installed AI/ML runtimes: Python versions with ML libraries, CUDA toolkit, TensorFlow, PyTorch, ONNX Runtime, and Hugging Face Transformers.
+
+**Evidence types:** `python-ml-libs`, `cuda-toolkit`, `ml-frameworks`
+**Assets:** `ai-runtime`
+
+### ai-models
+
+Scans for model files on disk across common formats: GGUF, SafeTensors, ONNX, HDF5, PyTorch checkpoints, and Hugging Face cache.
+
+**Evidence types:** `model-files`, `model-cache`
+**Assets:** `ai-model`
+
+### ai-prompts
+
+Searches for prompt template files, system prompt configurations, and potential prompt injection vectors in application code.
+
+**Evidence types:** `prompt-templates`, `system-prompts`, `prompt-injection-vectors`
+**Assets:** `prompt-template`
+
+### ai-rag
+
+Detects vector database installations and RAG pipeline components: ChromaDB, Pinecone, Weaviate, Milvus, and FAISS indices.
+
+**Evidence types:** `vector-databases`, `embedding-configs`, `rag-pipelines`
+**Assets:** `vector-database`, `rag-pipeline`
+
+## Running Specific Collectors
+
+The `--categories` flag controls which category of collectors runs:
+
+```bash
+# Cyber only
+beguardit start --categories cyber
+
+# AI only
+beguardit start --categories ai
+
+# Both (default)
+beguardit start --categories cyber,ai
+```
+
+The `--profile` flag controls depth — `quick` runs only the fast collectors, while `deep` runs all 10.

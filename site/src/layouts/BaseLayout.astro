@@ -1,0 +1,104 @@
+---
+// Base layout — shared shell for all pages
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Terminal-first cybersecurity and AI security assessment platform.' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | BeGuardit</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="bg-white text-slate-900 antialiased">
+    <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div class="mx-auto max-w-6xl flex items-center justify-between px-4 h-14">
+        <a href="/" class="flex items-center gap-2 font-bold text-lg tracking-tight">
+          <span class="text-blue-600">BG</span> BeGuardit
+        </a>
+        <nav class="hidden md:flex items-center gap-6 text-sm">
+          <a href="/docs" class="text-slate-600 hover:text-slate-900">Docs</a>
+          <a href="/install" class="text-slate-600 hover:text-slate-900">Install</a>
+          <a href="/downloads" class="text-slate-600 hover:text-slate-900">Downloads</a>
+          <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI" class="text-slate-600 hover:text-slate-900">GitHub</a>
+          <a href="/portal" class="text-sm font-medium text-white bg-blue-600 px-3 py-1.5 rounded-md hover:bg-blue-700 transition-colors">
+            Portal
+          </a>
+        </nav>
+        <!-- Mobile menu button -->
+        <button id="mobile-toggle" class="md:hidden text-slate-600 hover:text-slate-900">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+      <!-- Mobile nav -->
+      <div id="mobile-menu" class="hidden md:hidden border-t border-slate-200 px-4 py-3 space-y-2 text-sm">
+        <a href="/docs" class="block text-slate-600 hover:text-slate-900 py-1">Docs</a>
+        <a href="/install" class="block text-slate-600 hover:text-slate-900 py-1">Install</a>
+        <a href="/downloads" class="block text-slate-600 hover:text-slate-900 py-1">Downloads</a>
+        <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI" class="block text-slate-600 hover:text-slate-900 py-1">GitHub</a>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="border-t border-slate-200 mt-20">
+      <div class="mx-auto max-w-6xl px-4 py-10">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
+          <div>
+            <h4 class="font-semibold mb-3">Product</h4>
+            <ul class="space-y-2 text-slate-500">
+              <li><a href="/#features" class="hover:text-slate-700">Features</a></li>
+              <li><a href="/install" class="hover:text-slate-700">Install</a></li>
+              <li><a href="/downloads" class="hover:text-slate-700">Downloads</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-semibold mb-3">Documentation</h4>
+            <ul class="space-y-2 text-slate-500">
+              <li><a href="/docs" class="hover:text-slate-700">Getting Started</a></li>
+              <li><a href="/docs/configuration" class="hover:text-slate-700">Configuration</a></li>
+              <li><a href="/docs/collectors" class="hover:text-slate-700">Collectors</a></li>
+              <li><a href="/docs/api" class="hover:text-slate-700">API Reference</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-semibold mb-3">Community</h4>
+            <ul class="space-y-2 text-slate-500">
+              <li><a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI" class="hover:text-slate-700">GitHub</a></li>
+              <li><a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/issues" class="hover:text-slate-700">Issues</a></li>
+              <li><a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/discussions" class="hover:text-slate-700">Discussions</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 class="font-semibold mb-3">Legal</h4>
+            <ul class="space-y-2 text-slate-500">
+              <li><a href="/privacy" class="hover:text-slate-700">Privacy</a></li>
+              <li><a href="/terms" class="hover:text-slate-700">Terms</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="mt-8 pt-6 border-t border-slate-200 text-xs text-slate-400 text-center">
+          &copy; {new Date().getFullYear()} BeGuardit. All rights reserved.
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById('mobile-toggle')?.addEventListener('click', () => {
+        document.getElementById('mobile-menu')?.classList.toggle('hidden');
+      });
+    </script>
+  </body>
+</html>

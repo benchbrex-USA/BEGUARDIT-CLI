@@ -1,0 +1,139 @@
+---
+// Install page — step-by-step installation instructions
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Install" description="Install BeGuardit CLI on macOS, Linux, or Windows.">
+  <div class="mx-auto max-w-3xl px-4 py-16">
+    <h1 class="text-3xl font-bold mb-2">Installation</h1>
+    <p class="text-slate-500 mb-10">Install BeGuardit CLI on macOS, Linux, or Windows.</p>
+
+    <!-- Prerequisites -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-3">Prerequisites</h2>
+      <ul class="list-disc list-inside text-sm text-slate-600 space-y-1">
+        <li><strong>Node.js 20 LTS</strong> or later (<a href="https://nodejs.org" class="text-blue-600 hover:underline">nodejs.org</a>)</li>
+        <li><strong>npm 10+</strong> (included with Node.js)</li>
+        <li>macOS 13+, Ubuntu 22.04+, Debian 12+, RHEL 9+, or Windows 11</li>
+      </ul>
+    </section>
+
+    <!-- npm -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-3">Option 1 — npm (recommended)</h2>
+      <p class="text-sm text-slate-600 mb-3">Install globally from the npm registry:</p>
+      <div class="bg-slate-950 text-green-400 rounded-xl p-4 font-mono text-sm mb-3">
+        <p>npm install -g @beguardit/cli</p>
+      </div>
+      <p class="text-sm text-slate-500">Verify the installation:</p>
+      <div class="bg-slate-950 text-slate-300 rounded-xl p-4 font-mono text-sm mt-2">
+        <p><span class="text-slate-500">$</span> beguardit --version</p>
+        <p class="text-green-400">1.0.0</p>
+      </div>
+    </section>
+
+    <!-- npx -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-3">Option 2 — npx (no install)</h2>
+      <p class="text-sm text-slate-600 mb-3">Run directly without installing:</p>
+      <div class="bg-slate-950 text-green-400 rounded-xl p-4 font-mono text-sm">
+        <p>npx @beguardit/cli start</p>
+      </div>
+    </section>
+
+    <!-- Binary download -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-3">Option 3 — Binary download</h2>
+      <p class="text-sm text-slate-600 mb-3">
+        Download a pre-built binary from
+        <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/releases" class="text-blue-600 hover:underline">GitHub Releases</a>.
+      </p>
+
+      <div class="border border-slate-200 rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <th class="px-4 py-2.5">Platform</th>
+              <th class="px-4 py-2.5">Architecture</th>
+              <th class="px-4 py-2.5">File</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr>
+              <td class="px-4 py-2.5">macOS</td>
+              <td class="px-4 py-2.5 font-mono text-xs">x64 / arm64</td>
+              <td class="px-4 py-2.5">
+                <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/releases/latest/download/beguardit-darwin-x64.tar.gz" class="text-blue-600 hover:underline text-xs">x64</a>
+                &middot;
+                <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/releases/latest/download/beguardit-darwin-arm64.tar.gz" class="text-blue-600 hover:underline text-xs">arm64</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5">Linux</td>
+              <td class="px-4 py-2.5 font-mono text-xs">x64 / arm64</td>
+              <td class="px-4 py-2.5">
+                <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/releases/latest/download/beguardit-linux-x64.tar.gz" class="text-blue-600 hover:underline text-xs">x64</a>
+                &middot;
+                <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/releases/latest/download/beguardit-linux-arm64.tar.gz" class="text-blue-600 hover:underline text-xs">arm64</a>
+              </td>
+            </tr>
+            <tr>
+              <td class="px-4 py-2.5">Windows</td>
+              <td class="px-4 py-2.5 font-mono text-xs">x64</td>
+              <td class="px-4 py-2.5">
+                <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI/releases/latest/download/beguardit-win-x64.zip" class="text-blue-600 hover:underline text-xs">x64</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 space-y-3">
+        <p class="text-sm text-slate-600 font-medium">macOS / Linux:</p>
+        <div class="bg-slate-950 text-slate-300 rounded-xl p-4 font-mono text-sm space-y-1">
+          <p><span class="text-slate-500">#</span> <span class="text-green-400">Extract and move to PATH</span></p>
+          <p>tar xzf beguardit-*.tar.gz</p>
+          <p>sudo mv beguardit /usr/local/bin/</p>
+          <p>beguardit --version</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Docker -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-3">Option 4 — Docker</h2>
+      <p class="text-sm text-slate-600 mb-3">Run the full stack (API + Worker + Portal) with Docker Compose:</p>
+      <div class="bg-slate-950 text-slate-300 rounded-xl p-4 font-mono text-sm space-y-1">
+        <p>git clone https://github.com/benchbrex-USA/BEGUARDIT-CLI.git</p>
+        <p>cd BEGUARDIT-CLI</p>
+        <p>docker compose up -d</p>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">
+        This starts PostgreSQL, Redis, the API, the ARQ worker, and the portal at
+        <code class="bg-slate-100 px-1 rounded">http://localhost:5173</code>.
+      </p>
+    </section>
+
+    <!-- Uninstall -->
+    <section class="mb-12">
+      <h2 class="text-xl font-semibold mb-3">Uninstall</h2>
+      <div class="bg-slate-950 text-slate-300 rounded-xl p-4 font-mono text-sm space-y-1">
+        <p><span class="text-slate-500">#</span> Interactive uninstall — removes config, scheduled tasks, and global package</p>
+        <p><span class="text-green-400">beguardit uninstall</span></p>
+        <p>&nbsp;</p>
+        <p><span class="text-slate-500">#</span> Or remove manually via npm</p>
+        <p>npm uninstall -g @beguardit/cli</p>
+      </div>
+    </section>
+
+    <!-- Next steps -->
+    <section class="bg-blue-50 border border-blue-200 rounded-xl p-6">
+      <h2 class="text-lg font-semibold text-blue-900 mb-2">Next steps</h2>
+      <ul class="text-sm text-blue-800 space-y-1">
+        <li>Read the <a href="/docs" class="underline font-medium">Getting Started</a> guide</li>
+        <li>Configure scan profiles with <a href="/docs/configuration" class="underline font-medium">beguardit config</a></li>
+        <li>Explore the <a href="/docs/collectors" class="underline font-medium">10 collector plugins</a></li>
+      </ul>
+    </section>
+  </div>
+</BaseLayout>

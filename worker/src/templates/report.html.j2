@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BeGuardit Report — {{ session_id[:8] }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f8fafc; color: #0f172a; line-height: 1.6;
+      padding: 2rem; max-width: 1100px; margin: 0 auto;
+    }
+    header { border-bottom: 3px solid #2563eb; padding-bottom: 1rem; margin-bottom: 2rem; }
+    header h1 { font-size: 1.5rem; color: #1e293b; }
+    header .brand { font-size: 0.85rem; color: #2563eb; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    header .meta { font-size: 0.85rem; color: #64748b; margin-top: 0.5rem; }
+    header .meta code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+    h2 { font-size: 1.15rem; margin: 2rem 0 1rem; padding-bottom: 0.4rem; border-bottom: 2px solid #2563eb; color: #1e293b; }
+    .summary-grid { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 24px; }
+    .sev-card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 14px 18px; text-align: center; min-width: 110px; flex: 1;
+    }
+    .sev-card .count { font-size: 28px; font-weight: 700; }
+    .sev-card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+    .finding {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 14px 16px; margin: 10px 0;
+    }
+    .finding .title-row { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 4px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .badge-critical { background: #fef2f2; color: #dc2626; }
+    .badge-high     { background: #fff7ed; color: #ea580c; }
+    .badge-medium   { background: #fffbeb; color: #d97706; }
+    .badge-low      { background: #eff6ff; color: #2563eb; }
+    .badge-info     { background: #f9fafb; color: #6b7280; }
+    .finding .desc { font-size: 14px; color: #475569; }
+    .finding .category { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+    .finding .remediation { font-size: 13px; color: #059669; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    th {
+      background: #f1f5f9; text-align: left; padding: 8px 12px;
+      font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 0.04em;
+    }
+    td { padding: 7px 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+    td.mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; }
+    .attack-path {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 14px 16px; margin: 10px 0; border-left: 4px solid #7c3aed;
+    }
+    .attack-path .path-title { font-weight: 600; color: #7c3aed; margin-bottom: 4px; }
+    .attack-path .path-desc { font-size: 14px; color: #475569; }
+    .attack-path .path-steps { font-size: 13px; color: #64748b; margin-top: 6px; }
+    .attack-path .path-steps ol { padding-left: 1.2em; }
+    footer {
+      margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;
+      font-size: 12px; color: #94a3b8; text-align: center;
+    }
+    @media print {
+      body { padding: 0.5rem; }
+      .finding, .attack-path, .sev-card { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">BeGuardit</div>
+  <h1>Security Assessment Report</h1>
+  <div class="meta">
+    Session: <code>{{ session_id }}</code><br>
+    Host: {{ assessment.hostname | e }} &middot;
+    Mode: {{ assessment.mode | e }} &middot;
+    Status: {{ assessment.status | e }}<br>
+    Started: {{ assessment.started_at }} &middot;
+    Completed: {{ assessment.completed_at if assessment.completed_at else "—" }}<br>
+    Generated: {{ generated_at }}
+  </div>
+</header>
+
+<h2>Summary</h2>
+<div class="summary-grid">
+  <div class="sev-card">
+    <div class="count" style="color:#dc2626">{{ sev_counts.get('critical', 0) }}</div>
+    <div class="label">Critical</div>
+  </div>
+  <div class="sev-card">
+    <div class="count" style="color:#ea580c">{{ sev_counts.get('high', 0) }}</div>
+    <div class="label">High</div>
+  </div>
+  <div class="sev-card">
+    <div class="count" style="color:#d97706">{{ sev_counts.get('medium', 0) }}</div>
+    <div class="label">Medium</div>
+  </div>
+  <div class="sev-card">
+    <div class="count" style="color:#2563eb">{{ sev_counts.get('low', 0) }}</div>
+    <div class="label">Low</div>
+  </div>
+  <div class="sev-card">
+    <div class="count" style="color:#6b7280">{{ sev_counts.get('info', 0) }}</div>
+    <div class="label">Info</div>
+  </div>
+  <div class="sev-card">
+    <div class="count" style="color:#0ea5e9">{{ assets | length }}</div>
+    <div class="label">Assets</div>
+  </div>
+</div>
+
+<h2>Findings ({{ findings | length }})</h2>
+{% if findings %}
+  {% for f in findings %}
+  <div class="finding" style="border-left: 4px solid {{ severity_colors[f.severity][0] | default('#6b7280') }}">
+    <div class="title-row">
+      <span class="badge badge-{{ f.severity }}">{{ f.severity }}</span>
+      <span>{{ f.rule_id | e }} — {{ f.title | e }}</span>
+    </div>
+    {% if f.category %}
+    <div class="category">Category: {{ f.category | e }}</div>
+    {% endif %}
+    <div class="desc">{{ f.description | e }}</div>
+    {% if f.remediation %}
+    <div class="remediation">Remediation: {{ f.remediation | e }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <p style="color:#64748b">No findings recorded for this session.</p>
+{% endif %}
+
+<h2>Assets ({{ assets | length }})</h2>
+{% if assets %}
+<table>
+  <thead>
+    <tr><th>Type</th><th>Name</th></tr>
+  </thead>
+  <tbody>
+    {% for a in assets[:100] %}
+    <tr>
+      <td>{{ a.asset_type | e }}</td>
+      <td class="mono">{{ a.name | e }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if assets | length > 100 %}
+<p style="color:#94a3b8;font-size:13px">&hellip; and {{ assets | length - 100 }} more</p>
+{% endif %}
+{% else %}
+<p style="color:#64748b">No assets recorded.</p>
+{% endif %}
+
+{% if attack_paths %}
+<h2>Attack Paths ({{ attack_paths | length }})</h2>
+{% for path in attack_paths %}
+<div class="attack-path">
+  <div class="path-title">{{ path.title | e }}</div>
+  <div class="path-desc">{{ path.description | e }}</div>
+  {% if path.steps %}
+  <div class="path-steps">
+    <ol>
+      {% for step in path.steps %}
+      <li>{{ step | e }}</li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+<footer>
+  Generated by BeGuardit Worker &middot; {{ generated_at }}
+  {% if integrity_hash %}
+  <br>Integrity: <code>{{ integrity_hash }}</code>
+  {% endif %}
+</footer>
+
+</body>
+</html>

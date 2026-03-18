@@ -1,0 +1,97 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Configuration
+description: Configure BeGuardit CLI scan profiles, categories, and settings.
+---
+
+# Configuration
+
+BeGuardit stores its configuration in `~/.beguardit/config.json`. Use the `config` command to read and write settings.
+
+## Viewing Configuration
+
+```bash
+# List all settings
+beguardit config --list
+
+# Get a single key
+beguardit config --get profile
+```
+
+## Setting Values
+
+```bash
+# Set a string value
+beguardit config --set profile=deep
+
+# Set a comma-separated array
+beguardit config --set categories=cyber,ai
+
+# Set the API URL for online mode
+beguardit config --set apiUrl=https://api.beguardit.com
+```
+
+## Configuration File
+
+The config file is JSON and supports these keys:
+
+```json
+{
+  "profile": "standard",
+  "categories": ["cyber", "ai"],
+  "mode": "offline",
+  "apiUrl": "https://api.beguardit.com",
+  "outputDir": "./reports",
+  "outputFormats": ["json"],
+  "logLevel": "info"
+}
+```
+
+### Reference
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `profile` | string | `"standard"` | Scan depth: `quick`, `standard`, or `deep` |
+| `categories` | string[] | `["cyber", "ai"]` | Which collector categories to run |
+| `mode` | string | `"offline"` | `offline` (local only) or `online` (upload to API) |
+| `apiUrl` | string | — | API base URL for online mode |
+| `outputDir` | string | `"."` | Directory for report output |
+| `outputFormats` | string[] | `["json"]` | Report formats: `json`, `html`, `sarif` |
+| `logLevel` | string | `"info"` | Log verbosity: `debug`, `info`, `warn`, `error` |
+
+## Type Preservation
+
+The `config --set` command preserves types automatically:
+
+- Comma-separated values become arrays: `categories=cyber,ai` → `["cyber", "ai"]`
+- `true` / `false` become booleans
+- Numeric strings become numbers
+- Everything else stays a string
+
+## Environment Variables
+
+All config keys can be overridden via environment variables prefixed with `BEGUARDIT_`:
+
+```bash
+BEGUARDIT_PROFILE=deep BEGUARDIT_MODE=online beguardit start
+```
+
+## Scheduled Scans
+
+Set up recurring assessments:
+
+```bash
+# Schedule a daily scan at 2 AM
+beguardit schedule --cron "0 2 * * *"
+
+# macOS: creates a launchd plist
+# Linux: adds a crontab entry
+# Windows: creates a scheduled task
+```
+
+View or remove scheduled scans:
+
+```bash
+beguardit schedule --list
+beguardit schedule --remove
+```

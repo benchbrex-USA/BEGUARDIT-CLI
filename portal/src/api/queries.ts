@@ -1,8 +1,10 @@
 // TanStack Query keys and query functions
 import { api } from './client';
 import type {
+  AdminUser,
   AssessmentDetail,
   AssessmentSummary,
+  AuditLogEntry,
   AuthResponse,
   Finding,
   Asset,
@@ -11,6 +13,7 @@ import type {
   PaginatedResponse,
   ReportJob,
   Tenant,
+  UploadResponse,
 } from '../types/api';
 
 // ── Query keys ──────────────────────────────────────────────────────
@@ -22,9 +25,11 @@ export const queryKeys = {
   assessments: (params?: Record<string, string>) => ['assessments', params] as const,
   assessment: (id: string) => ['assessment', id] as const,
   findings: (id: string, params?: Record<string, string>) => ['findings', id, params] as const,
-  assets: (id: string) => ['assets', id] as const,
+  assets: (id: string, params?: Record<string, string>) => ['assets', id, params] as const,
   reports: (params?: Record<string, string>) => ['reports', params] as const,
   report: (id: string) => ['report', id] as const,
+  adminUsers: (params?: Record<string, string>) => ['adminUsers', params] as const,
+  auditLog: (params?: Record<string, string>) => ['auditLog', params] as const,
 };
 
 // ── Auth ─────────────────────────────────────────────────────────────
@@ -97,3 +102,29 @@ export const fetchReport = (id: string) => api.get<ReportJob>(`/reports/${id}`);
 
 export const createReport = (sessionId: string, format: string) =>
   api.post<ReportJob>('/reports/', { session_id: sessionId, format });
+
+// ── Upload (§6.4) ───────────────────────────────────────────────────
+
+export const uploadAssessment = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.upload<UploadResponse>('/upload/assessment', formData);
+};
+
+// ── Admin (§6.6) ────────────────────────────────────────────────────
+
+export const fetchAdminUsers = (offset = 0, limit = 50, isActive?: boolean) => {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  if (isActive !== undefined) params.set('is_active', String(isActive));
+  return api.get<PaginatedResponse<AdminUser>>(`/admin/users?${params}`);
+};
+
+export const updateAdminUser = (userId: string, data: { role?: string; is_active?: boolean; display_name?: string }) =>
+  api.patch<AdminUser>(`/admin/users/${userId}`, data);
+
+export const fetchAuditLog = (offset = 0, limit = 50, action?: string, userId?: string) => {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  if (action) params.set('action', action);
+  if (userId) params.set('user_id', userId);
+  return api.get<PaginatedResponse<AuditLogEntry>>(`/admin/audit-log?${params}`);
+};

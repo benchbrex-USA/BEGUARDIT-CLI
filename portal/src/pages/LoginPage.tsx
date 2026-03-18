@@ -1,10 +1,11 @@
-// Login page
+// Login page (§10.1)
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuthStore } from '../stores/authStore';
+import { Button, Input } from '../components/ui';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const login = useAuthStore((s) => s.login);
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,22 +35,25 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4">
           {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-          </div>
+          <Input
+            label="Email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-          </div>
+          <Input
+            label="Password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-          <button type="submit" disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
+          <Button type="submit" loading={loading} className="w-full">
+            Sign in
+          </Button>
         </form>
 
         <p className="text-sm text-center mt-4 text-slate-500">

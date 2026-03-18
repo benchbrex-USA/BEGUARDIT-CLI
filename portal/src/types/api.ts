@@ -119,3 +119,35 @@ export interface ApiError {
     correlation_id?: string;
   };
 }
+
+// Admin types (§6.6)
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string | null;
+  is_active: boolean;
+  role: string | null;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  user_id: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  detail: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+// Upload types (§6.4)
+
+export interface UploadResponse {
+  session_id: string;
+  findings_imported: number;
+  assets_imported: number;
+  evidence_imported: number;
+}

@@ -1,0 +1,165 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: API Reference
+description: REST API reference for the BeGuardit platform.
+---
+
+# API Reference
+
+The BeGuardit API is a FastAPI application serving the portal and CLI online mode. All endpoints are under `/api/v1/`.
+
+**Base URL:** `https://api.beguardit.com/api/v1`
+
+**Authentication:** Session-based with HttpOnly cookies. Authenticate via `POST /auth/login`, then include `credentials: 'include'` in all requests.
+
+## Auth
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Create account + tenant |
+| POST | `/auth/login` | Authenticate, receive session cookie |
+| POST | `/auth/logout` | Invalidate session |
+| GET | `/auth/me` | Current user, tenant, role, memberships |
+| POST | `/auth/switch-tenant` | Switch active tenant (rotates session) |
+
+### POST /auth/register
+
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword",
+  "display_name": "Jane Doe",
+  "tenant_name": "Acme Corp",
+  "tenant_slug": "acme-corp"
+}
+```
+
+### POST /auth/login
+
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
+```
+
+## Tenants
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/tenants/` | viewer+ | Current tenant info |
+| PATCH | `/tenants/` | admin | Update tenant name/settings |
+| GET | `/tenants/members` | viewer+ | List members |
+| POST | `/tenants/members` | admin | Add member by email |
+| PATCH | `/tenants/members/{id}` | admin | Change member role |
+| DELETE | `/tenants/members/{id}` | admin | Remove member |
+
+## Assessments
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/assessments/` | viewer+ | List assessments (paginated, filterable by status) |
+| GET | `/assessments/{id}` | viewer+ | Assessment detail with severity summary |
+| GET | `/assessments/{id}/findings` | viewer+ | Findings (filterable by severity, category) |
+| GET | `/assessments/{id}/assets` | viewer+ | Discovered assets (filterable by type) |
+| GET | `/assessments/{id}/evidence` | viewer+ | Raw evidence (filterable by collector) |
+| DELETE | `/assessments/{id}` | operator+ | Delete assessment and all children |
+
+### Query Parameters
+
+All list endpoints support pagination:
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `offset` | int | 0 | Skip first N items |
+| `limit` | int | 50 | Max items to return (1–200) |
+
+## Reports
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| POST | `/reports/` | viewer+ | Queue a report generation job |
+| GET | `/reports/` | viewer+ | List report jobs |
+| GET | `/reports/{id}` | viewer+ | Report job status |
+| GET | `/reports/{id}/download` | viewer+ | Download completed report |
+
+### POST /reports/
+
+```json
+{
+  "session_id": "a1b2c3d4-...",
+  "format": "html"
+}
+```
+
+Supported formats: `html`, `pdf`, `sarif`, `json`
+
+### Report Job Status Flow
+
+```
+queued → processing → completed
+                    → failed
+```
+
+## Upload
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| POST | `/upload/assessment` | operator+ | Upload JSON canonical report (multipart) |
+
+Upload a report file produced by `beguardit start --mode online`:
+
+```bash
+curl -X POST https://api.beguardit.com/api/v1/upload/assessment \
+  -F "file=@beguardit-report.json"
+```
+
+## Admin
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/admin/users` | admin | List all tenant users |
+| PATCH | `/admin/users/{id}` | admin | Update role, active status, display name |
+| GET | `/admin/audit-log` | admin | Audit trail (filterable by action, user) |
+
+### PATCH /admin/users/{id}
+
+```json
+{
+  "role": "operator",
+  "is_active": true,
+  "display_name": "Jane Doe"
+}
+```
+
+## Health
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Liveness probe (always 200) |
+| GET | `/ready` | Readiness probe (checks DB, Redis, worker) |
+
+## Error Responses
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Assessment not found.",
+    "detail": null,
+    "correlation_id": "req_abc123"
+  }
+}
+```
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `VALIDATION_ERROR` | 400 | Invalid request body |
+| `NOT_AUTHENTICATED` | 401 | Missing or expired session |
+| `FORBIDDEN` | 403 | Insufficient role |
+| `NOT_FOUND` | 404 | Resource not found |
+| `CONFLICT` | 409 | Duplicate resource |
+| `RATE_LIMIT` | 429 | Too many requests |
+| `INTERNAL_ERROR` | 500 | Server error |

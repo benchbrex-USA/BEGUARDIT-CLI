@@ -1,0 +1,92 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Policy Engine
+description: Reference for BeGuardit's 20 policy rules and correlation engine.
+---
+
+# Policy Engine
+
+The policy engine evaluates collected evidence against 20 rules (9 cyber + 11 AI), classifies severity using CVSS v3.1, and builds a correlation graph to detect multi-step attack paths.
+
+## Severity Classification
+
+Findings are classified based on CVSS v3.1 base scores:
+
+| Severity | Score Range | SARIF Level |
+|----------|-----------|-------------|
+| Critical | 9.0 — 10.0 | error |
+| High | 7.0 — 8.9 | error |
+| Medium | 4.0 — 6.9 | warning |
+| Low | 0.1 — 3.9 | note |
+| Info | 0.0 | none |
+
+## Cyber Rules
+
+| Rule ID | Title | Severity |
+|---------|-------|----------|
+| CYB-001 | Outdated operating system | High |
+| CYB-002 | Firewall disabled | High |
+| CYB-005 | Unnecessary services running | Medium |
+| CYB-007 | Weak SSH configuration | High |
+| CYB-010 | Default credentials detected | Critical |
+| CYB-015 | Unpatched packages with known CVEs | Critical |
+| CYB-020 | Excessive sudo privileges | Medium |
+| CYB-025 | World-writable sensitive files | High |
+| CYB-030 | SUID binaries in non-standard paths | Medium |
+
+## AI Rules
+
+| Rule ID | Title | Severity |
+|---------|-------|----------|
+| AI-001 | AI runtime without sandboxing | High |
+| AI-003 | Model files with excessive permissions | Medium |
+| AI-005 | Prompt injection vectors detected | Critical |
+| AI-007 | System prompts exposed in source code | High |
+| AI-010 | Unencrypted model storage | Medium |
+| AI-012 | RAG pipeline without input validation | Critical |
+| AI-015 | Vector database without authentication | High |
+| AI-018 | Embedding model version mismatch | Low |
+| AI-020 | Model provenance unverified | Medium |
+| AI-025 | Prompt template allows arbitrary injection | Critical |
+| AI-032 | RAG data source without access control | High |
+
+## Correlation Graph
+
+After evaluating individual rules, the engine builds a directed graph connecting related findings through shared assets:
+
+```
+┌─────────────┐  runs-on  ┌──────────────┐  exposes  ┌──────────────┐
+│  CYB-001    │──────────▶│  OS Asset    │──────────▶│  CYB-015     │
+│  Outdated OS│           │              │           │  Unpatched   │
+└─────────────┘           └──────────────┘           └──────────────┘
+                                │
+                                │ runs-on
+                                ▼
+                          ┌──────────────┐  configures ┌──────────────┐
+                          │  AI Runtime  │────────────▶│  AI-001      │
+                          │              │             │  No sandbox  │
+                          └──────────────┘             └──────────────┘
+```
+
+### Edge Types
+
+| Relation | Description |
+|----------|-------------|
+| `runs-on` | Finding affects an asset that another finding depends on |
+| `exposes` | One vulnerability exposes another attack surface |
+| `authenticates-via` | Auth weakness enables further exploitation |
+| `stores-data-in` | Data storage finding links to data access finding |
+| `chains-to` | Direct attack chain between findings |
+| `configures` | Configuration weakness affects dependent components |
+
+### Attack Path Detection
+
+The engine uses **BFS traversal** (max depth 8) from every finding with severity >= medium to discover multi-step attack paths. When two or more high-severity findings chain together, the composite severity escalates to critical.
+
+### Severity Escalation
+
+| Condition | Escalation |
+|-----------|-----------|
+| 2+ high findings in path | high &rarr; critical |
+| 2+ medium findings in path | medium &rarr; high |
+| Cross-category chain (cyber + AI) | +1 severity level |

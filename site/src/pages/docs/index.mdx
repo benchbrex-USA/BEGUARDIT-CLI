@@ -1,0 +1,99 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Getting Started
+description: Quick start guide for BeGuardit CLI.
+---
+
+# Getting Started
+
+BeGuardit is a terminal-first cybersecurity and AI security assessment platform. It collects evidence from your system, evaluates it against 20 policy rules, traces attack paths, and generates compliance-ready reports.
+
+## Quick Start
+
+Install the CLI globally:
+
+```bash
+npm install -g @beguardit/cli
+```
+
+Run your first assessment:
+
+```bash
+beguardit start
+```
+
+This will:
+
+1. Collect evidence using all applicable collectors for your platform
+2. Evaluate findings against the policy engine (9 cyber + 11 AI rules)
+3. Build a correlation graph and detect attack paths
+4. Generate a JSON canonical report with SHA-256 integrity hash
+
+## Scan Profiles
+
+BeGuardit supports three scan profiles that control which collectors run:
+
+| Profile | Collectors | Use Case |
+|---------|-----------|----------|
+| `quick` | os-info, ai-runtimes | Fast overview, CI pipelines |
+| `standard` | All except filesystem, ai-rag | Routine assessments |
+| `deep` | All 10 collectors | Full audit, compliance |
+
+```bash
+# Run a quick scan
+beguardit start --profile quick
+
+# Run a deep scan with both categories
+beguardit start --profile deep --categories cyber,ai
+```
+
+## Categories
+
+Collectors are organized into two categories:
+
+- **cyber** — OS, network, services, packages, users/auth, filesystem
+- **ai** — AI runtimes, models, prompt injection, RAG pipelines
+
+By default, both categories are assessed. Filter with `--categories`:
+
+```bash
+beguardit start --categories ai
+```
+
+## Output Modes
+
+### Offline (default)
+
+The assessment runs locally and saves the report to disk. No network calls.
+
+```bash
+beguardit start
+# Output: ./beguardit-report.json
+```
+
+### Online
+
+The assessment runs locally, then uploads the JSON canonical report to the BeGuardit API for storage and viewing in the portal.
+
+```bash
+beguardit start --mode online --api-url https://api.beguardit.com
+```
+
+## CLI Commands
+
+| Command | Description |
+|---------|------------|
+| `beguardit start` | Run a security assessment |
+| `beguardit status` | Show agent status and last assessment |
+| `beguardit config` | View or modify configuration |
+| `beguardit schedule` | Set up recurring assessments (cron/launchd) |
+| `beguardit upload` | Upload an existing report to the API |
+| `beguardit uninstall` | Remove BeGuardit and all configuration |
+| `beguardit --version` | Show installed version |
+
+## Next Steps
+
+- [Configuration](/docs/configuration) — fine-tune scan settings
+- [Collectors](/docs/collectors) — understand what each collector gathers
+- [Policy Engine](/docs/policy-engine) — learn about the 20 rules
+- [Reports](/docs/reports) — output formats and integrations

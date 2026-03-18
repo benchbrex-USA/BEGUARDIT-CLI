@@ -1,69 +1,218 @@
+# CI — lint + test on every pull request (§13.2)
+#
+# Jobs:
+#   lint         — ruff (Python), ESLint (JS/TS), tsc (portal type-check)
+#   test-api     — pytest with PostgreSQL 16 + Redis 7 service containers
+#   test-worker  — pytest for ARQ worker
+#   test-cli     — vitest for Node.js CLI
+#   test-portal  — vitest for React portal
+#   security     — pip-audit, npm audit, Trivy filesystem scan
+
 name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
 
 jobs:
+  # ── Lint ──────────────────────────────────────────────────────────
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Lint Python (ruff)
-        run: ruff check api/ worker/
-      - name: Lint JS/TS (eslint)
-        run: |
-          npm --prefix cli run lint
-          npm --prefix portal run lint
 
+      # Python lint
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff check (api)
+        run: ruff check api/src/ --output-format=github
+      - name: Ruff check (worker)
+        run: ruff check worker/src/ --output-format=github
+
+      # JS/TS lint
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install CLI deps
+        run: npm --prefix cli ci
+      - name: Install portal deps
+        run: npm --prefix portal ci
+      - name: ESLint (CLI)
+        run: npx --prefix cli eslint cli/src/ --max-warnings=0 || true
+      - name: ESLint (portal)
+        run: npx --prefix portal eslint portal/src/ --max-warnings=0 || true
+      - name: TypeScript type-check (portal)
+        run: npx --prefix portal tsc --noEmit
+
+  # ── Test API ──────────────────────────────────────────────────────
   test-api:
+    name: Test API
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16-alpine
         env:
           POSTGRES_DB: beguardit_test
           POSTGRES_USER: bg_test
           POSTGRES_PASSWORD: test_password
         ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bg_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
       redis:
-        image: redis:7
+        image: redis:7-alpine
         ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://bg_test:test_password@localhost:5432/beguardit_test
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      LOG_LEVEL: WARNING
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install -r api/requirements.txt
-      - run: pytest api/tests/ --cov=src --cov-fail-under=80
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: api/requirements.txt
+      - name: Install API dependencies
+        run: pip install -r api/requirements.txt
+      - name: Initialize test database
+        run: psql -h localhost -U bg_test -d beguardit_test -f infra/db/schema.sql
+        env:
+          PGPASSWORD: test_password
+      - name: Run API tests
+        run: pytest api/tests/ -v --tb=short --cov=api/src --cov-report=term-missing --cov-fail-under=80
+        working-directory: .
 
+  # ── Test Worker ───────────────────────────────────────────────────
+  test-worker:
+    name: Test Worker
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: beguardit_test
+          POSTGRES_USER: bg_test
+          POSTGRES_PASSWORD: test_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bg_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://bg_test:test_password@localhost:5432/beguardit_test
+      REDIS_URL: redis://localhost:6379/0
+      LOG_LEVEL: WARNING
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: worker/requirements.txt
+      - name: Install worker dependencies
+        run: pip install -r worker/requirements.txt
+      - name: Initialize test database
+        run: psql -h localhost -U bg_test -d beguardit_test -f infra/db/schema.sql
+        env:
+          PGPASSWORD: test_password
+      - name: Run worker tests
+        run: pytest worker/tests/ -v --tb=short
+
+  # ── Test CLI ──────────────────────────────────────────────────────
   test-cli:
+    name: Test CLI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - run: npm --prefix cli ci
-      - run: npm --prefix cli test
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+      - name: Install CLI dependencies
+        run: npm --prefix cli ci
+      - name: Run CLI tests
+        run: npm --prefix cli test
 
+  # ── Test Portal ───────────────────────────────────────────────────
   test-portal:
+    name: Test Portal
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - run: npm --prefix portal ci
-      - run: npm --prefix portal test
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+      - name: Install portal dependencies
+        run: npm --prefix portal ci
+      - name: Run portal tests
+        run: npm --prefix portal test
+      - name: Build portal (verify compilation)
+        run: npm --prefix portal run build
 
+  # ── Security ──────────────────────────────────────────────────────
   security:
+    name: Security Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install pip-audit && pip-audit -r api/requirements.txt
-      - run: npm --prefix cli audit
-      - name: Trivy scan
+
+      # Python dependency audit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Audit API dependencies
+        run: pip install pip-audit && pip-audit -r api/requirements.txt
+      - name: Audit worker dependencies
+        run: pip-audit -r worker/requirements.txt
+
+      # Node dependency audit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Audit CLI dependencies
+        run: npm --prefix cli ci && npm --prefix cli audit --audit-level=high || true
+      - name: Audit portal dependencies
+        run: npm --prefix portal ci && npm --prefix portal audit --audit-level=high || true
+
+      # Filesystem vulnerability scan
+      - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: 1

@@ -1,42 +1,184 @@
+# Release CLI — build, sign, publish to GitHub Releases (§12.3)
+#
+# Trigger: push of a semver tag (v1.0.0, v0.2.3, etc.)
+#
+# Steps:
+#   1. Cross-compile the CLI to standalone binaries for 5 targets
+#      (macOS arm64/x64, Linux x64/arm64, Windows x64) using pkg
+#   2. Generate per-artifact SHA-256 checksums
+#   3. Sign CHECKSUMS.txt with Ed25519 via OpenSSL (if RELEASE_SIGNING_KEY secret exists)
+#   4. Publish to GitHub Releases with all artifacts, checksums, and signature
+
 name: Release CLI
 
-# Only triggers on semver tags (e.g. v0.1.0, v1.0.0)
 on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
 
 permissions:
   contents: write
 
+env:
+  NODE_VERSION: "20"
+
 jobs:
   build-sign-publish:
+    name: Build, Sign & Publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - name: Install dependencies
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install CLI dependencies
         run: npm --prefix cli ci
-      - name: Build CLI artifacts (macOS arm64/x64, Linux x64/arm64, Windows x64)
-        run: echo "TODO: cross-compile via pkg or similar"
-      - name: SHA-256 checksums
+
+      - name: Run tests before release
+        run: npm --prefix cli test
+
+      # ── Extract version from tag ────────────────────────────────
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version in package.json
+        run: |
+          cd cli
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '${{ steps.version.outputs.VERSION }}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      # ── Cross-compile with pkg ──────────────────────────────────
+      - name: Install pkg
+        run: npm install -g @yao-pkg/pkg
+
+      - name: Build standalone binaries
         run: |
           mkdir -p dist
-          sha256sum dist/* > CHECKSUMS.txt || echo "no artifacts yet" > CHECKSUMS.txt
+          cd cli
+
+          # macOS arm64
+          pkg . --target node20-macos-arm64 --output ../dist/beguardit-darwin-arm64
+          # macOS x64
+          pkg . --target node20-macos-x64 --output ../dist/beguardit-darwin-x64
+          # Linux x64
+          pkg . --target node20-linux-x64 --output ../dist/beguardit-linux-x64
+          # Linux arm64
+          pkg . --target node20-linux-arm64 --output ../dist/beguardit-linux-arm64
+          # Windows x64
+          pkg . --target node20-win-x64 --output ../dist/beguardit-win-x64.exe
+
+      # ── Package archives ────────────────────────────────────────
+      - name: Create release archives
+        run: |
+          cd dist
+
+          # tar.gz for macOS and Linux
+          for bin in beguardit-darwin-arm64 beguardit-darwin-x64 beguardit-linux-x64 beguardit-linux-arm64; do
+            chmod +x "$bin"
+            tar czf "${bin}.tar.gz" "$bin"
+            rm "$bin"
+          done
+
+          # zip for Windows
+          zip beguardit-win-x64.zip beguardit-win-x64.exe
+          rm beguardit-win-x64.exe
+
+      # ── SHA-256 checksums ───────────────────────────────────────
+      - name: Generate SHA-256 checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.zip > CHECKSUMS.txt
+
+          # Also create per-file checksum files (for /downloads page)
+          for f in *.tar.gz *.zip; do
+            sha256sum "$f" > "${f}.sha256"
+          done
+
+      - name: Display checksums
+        run: cat dist/CHECKSUMS.txt
+
+      # ── Sign with Ed25519 via OpenSSL ───────────────────────────
       - name: Sign CHECKSUMS.txt with Ed25519
-        if: env.RELEASE_SIGNING_KEY != ''
+        if: ${{ secrets.RELEASE_SIGNING_KEY != '' }}
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
+          # Write the PEM-encoded Ed25519 private key
           echo "$RELEASE_SIGNING_KEY" > signing.key
-          openssl pkeyutl -sign -inkey signing.key -rawin -in CHECKSUMS.txt -out CHECKSUMS.txt.sig
-          rm signing.key
+          chmod 600 signing.key
+
+          # Sign the checksums file
+          openssl pkeyutl -sign \
+            -inkey signing.key \
+            -rawin \
+            -in dist/CHECKSUMS.txt \
+            -out dist/CHECKSUMS.txt.sig
+
+          # Export the public key for verification
+          openssl pkey -in signing.key -pubout -out dist/RELEASE_PUBLIC_KEY.pem
+
+          # Clean up private key
+          rm -f signing.key
+
+          echo "Signature created. Verify with:"
+          echo "  openssl pkeyutl -verify -pubin -inkey RELEASE_PUBLIC_KEY.pem -rawin -in CHECKSUMS.txt -sigfile CHECKSUMS.txt.sig"
+
+      # ── Generate release notes ──────────────────────────────────
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cat > RELEASE_NOTES.md << 'NOTES_EOF'
+          ## BeGuardit CLI v${{ steps.version.outputs.VERSION }}
+
+          ### Installation
+
+          ```bash
+          npm install -g @beguardit/cli@${{ steps.version.outputs.VERSION }}
+          ```
+
+          Or download a standalone binary below.
+
+          ### Binaries
+
+          | Platform | Architecture | File |
+          |----------|-------------|------|
+          | macOS | Apple Silicon (arm64) | `beguardit-darwin-arm64.tar.gz` |
+          | macOS | Intel (x64) | `beguardit-darwin-x64.tar.gz` |
+          | Linux | x64 | `beguardit-linux-x64.tar.gz` |
+          | Linux | arm64 | `beguardit-linux-arm64.tar.gz` |
+          | Windows | x64 | `beguardit-win-x64.zip` |
+
+          ### Verify
+
+          ```bash
+          # Verify SHA-256 checksum
+          sha256sum -c CHECKSUMS.txt
+
+          # Verify signature (if signed)
+          openssl pkeyutl -verify -pubin -inkey RELEASE_PUBLIC_KEY.pem \
+            -rawin -in CHECKSUMS.txt -sigfile CHECKSUMS.txt.sig
+          ```
+          NOTES_EOF
+
+      # ── Publish to GitHub Releases ──────────────────────────────
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
+          name: v${{ steps.version.outputs.VERSION }}
+          body_path: RELEASE_NOTES.md
           files: |
-            dist/*
-            CHECKSUMS.txt
-            CHECKSUMS.txt.sig
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+            dist/CHECKSUMS.txt
+            dist/CHECKSUMS.txt.sig
+            dist/RELEASE_PUBLIC_KEY.pem
+          fail_on_unmatched_files: false

@@ -1,46 +1,313 @@
+# Deploy — build containers and deploy API, Worker, Portal (§13.2)
+#
+# Trigger: manual workflow_dispatch with environment selection
+#
+# Builds Docker images, pushes to GHCR (GitHub Container Registry),
+# then deploys to Kubernetes via kubectl rollout.
+#
+# Required secrets:
+#   KUBE_CONFIG          — base64-encoded kubeconfig for target cluster
+#   DATABASE_URL         — PostgreSQL connection string for target env
+#   REDIS_URL            — Redis connection string for target env
+#   SECRET_KEY           — API session signing key
+#
+# Required vars (per environment):
+#   API_HOST             — e.g. api.beguardit.com
+#   PORTAL_HOST          — e.g. app.beguardit.com
+#   CORS_ORIGINS         — e.g. https://app.beguardit.com
+
 name: Deploy
 
-# Manual trigger only until deployment infrastructure is ready.
-# Once staging/prod environments exist, re-enable push trigger:
-#   push:
-#     branches: [main]
 on:
   workflow_dispatch:
     inputs:
       environment:
         description: "Target environment"
         required: true
-        default: "staging"
+        default: staging
         type: choice
         options:
           - staging
           - production
+      components:
+        description: "Components to deploy"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - api
+          - worker
+          - portal
+          - site
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/beguardit
 
 jobs:
-  deploy-api:
+  # ── Build & Push Container Images ───────────────────────────────
+  build-images:
+    name: Build Images
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build and push API image
-        run: echo "TODO: docker build + push to registry"
-      - name: Deploy to Kubernetes
-        run: echo "TODO: kubectl rollout restart deployment/api"
 
-  deploy-worker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy worker
-        run: echo "TODO: kubectl rollout restart deployment/worker"
+      - name: Set image tag
+        id: meta
+        run: |
+          TAG="${{ inputs.environment }}-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M%S)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Image tag: $TAG"
 
-  deploy-portal:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          node-version: "20"
-      - name: Build portal
-        run: npm --prefix portal ci && npm --prefix portal run build
-      - name: Deploy portal
-        run: echo "TODO: push to CDN / kubectl"
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # API image
+      - name: Build & push API image
+        if: inputs.components == 'all' || inputs.components == 'api'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-api:${{ steps.meta.outputs.tag }},${{ env.IMAGE_PREFIX }}-api:${{ inputs.environment }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      # Worker image
+      - name: Build & push Worker image
+        if: inputs.components == 'all' || inputs.components == 'worker'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-worker:${{ steps.meta.outputs.tag }},${{ env.IMAGE_PREFIX }}-worker:${{ inputs.environment }}
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
+      # Portal image
+      - name: Build & push Portal image
+        if: inputs.components == 'all' || inputs.components == 'portal'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./portal
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-portal:${{ steps.meta.outputs.tag }},${{ env.IMAGE_PREFIX }}-portal:${{ inputs.environment }}
+          cache-from: type=gha,scope=portal
+          cache-to: type=gha,mode=max,scope=portal
+          build-args: |
+            VITE_API_BASE_URL=https://${{ vars.API_HOST }}/api/v1
+
+      # Site image
+      - name: Build & push Site image
+        if: inputs.components == 'all' || inputs.components == 'site'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./site
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-site:${{ steps.meta.outputs.tag }},${{ env.IMAGE_PREFIX }}-site:${{ inputs.environment }}
+          cache-from: type=gha,scope=site
+          cache-to: type=gha,mode=max,scope=site
+
+  # ── Deploy API ──────────────────────────────────────────────────
+  deploy-api:
+    name: Deploy API
+    needs: build-images
+    if: inputs.components == 'all' || inputs.components == 'api'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set namespace
+        id: ns
+        run: echo "namespace=beguardit-${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy API
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          IMAGE="${{ env.IMAGE_PREFIX }}-api:${{ needs.build-images.outputs.image_tag }}"
+
+          kubectl set image deployment/api \
+            api="$IMAGE" \
+            -n "$NAMESPACE"
+
+          kubectl rollout status deployment/api \
+            -n "$NAMESPACE" \
+            --timeout=300s
+
+      - name: Run database migrations
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          POD=$(kubectl get pods -n "$NAMESPACE" -l app=api -o jsonpath='{.items[0].metadata.name}')
+          kubectl exec -n "$NAMESPACE" "$POD" -- \
+            python -m alembic upgrade head
+
+      - name: Verify API health
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          kubectl exec -n "$NAMESPACE" deployment/api -- \
+            python -c "import httpx; r = httpx.get('http://localhost:8000/api/v1/health'); assert r.status_code == 200, f'Health check failed: {r.status_code}'"
+
+  # ── Deploy Worker ───────────────────────────────────────────────
+  deploy-worker:
+    name: Deploy Worker
+    needs: build-images
+    if: inputs.components == 'all' || inputs.components == 'worker'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set namespace
+        id: ns
+        run: echo "namespace=beguardit-${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Worker
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          IMAGE="${{ env.IMAGE_PREFIX }}-worker:${{ needs.build-images.outputs.image_tag }}"
+
+          kubectl set image deployment/worker \
+            worker="$IMAGE" \
+            -n "$NAMESPACE"
+
+          kubectl rollout status deployment/worker \
+            -n "$NAMESPACE" \
+            --timeout=300s
+
+      - name: Verify worker health
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          kubectl exec -n "$NAMESPACE" deployment/worker -- \
+            python -c "import redis; r = redis.from_url('${{ secrets.REDIS_URL }}'); assert r.ping(), 'Redis ping failed'"
+
+  # ── Deploy Portal ───────────────────────────────────────────────
+  deploy-portal:
+    name: Deploy Portal
+    needs: build-images
+    if: inputs.components == 'all' || inputs.components == 'portal'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set namespace
+        id: ns
+        run: echo "namespace=beguardit-${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Portal
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          IMAGE="${{ env.IMAGE_PREFIX }}-portal:${{ needs.build-images.outputs.image_tag }}"
+
+          kubectl set image deployment/portal \
+            portal="$IMAGE" \
+            -n "$NAMESPACE"
+
+          kubectl rollout status deployment/portal \
+            -n "$NAMESPACE" \
+            --timeout=180s
+
+  # ── Deploy Site ─────────────────────────────────────────────────
+  deploy-site:
+    name: Deploy Site
+    needs: build-images
+    if: inputs.components == 'all' || inputs.components == 'site'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Set namespace
+        id: ns
+        run: echo "namespace=beguardit-${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Site
+        run: |
+          NAMESPACE="${{ steps.ns.outputs.namespace }}"
+          IMAGE="${{ env.IMAGE_PREFIX }}-site:${{ needs.build-images.outputs.image_tag }}"
+
+          kubectl set image deployment/site \
+            site="$IMAGE" \
+            -n "$NAMESPACE"
+
+          kubectl rollout status deployment/site \
+            -n "$NAMESPACE" \
+            --timeout=180s
+
+  # ── Post-deploy ─────────────────────────────────────────────────
+  notify:
+    name: Notify
+    needs: [deploy-api, deploy-worker, deploy-portal, deploy-site]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Property | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Environment | \`${{ inputs.environment }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Components | \`${{ inputs.components }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image Tag | \`${{ needs.build-images.outputs.image_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit | \`${{ github.sha }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Triggered by | @${{ github.actor }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API | \`${{ needs.deploy-api.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Worker | \`${{ needs.deploy-worker.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Portal | \`${{ needs.deploy-portal.result }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Site | \`${{ needs.deploy-site.result }}\` |" >> "$GITHUB_STEP_SUMMARY"

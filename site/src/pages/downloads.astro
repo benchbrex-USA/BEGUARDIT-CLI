@@ -1,0 +1,98 @@
+---
+// Downloads page — links to GitHub Releases
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const REPO = 'benchbrex-USA/BEGUARDIT-CLI';
+const RELEASES_URL = `https://github.com/${REPO}/releases`;
+const LATEST_URL = `${RELEASES_URL}/latest`;
+
+const ASSETS = [
+  { platform: 'macOS', arch: 'Apple Silicon (arm64)', file: 'beguardit-darwin-arm64.tar.gz', icon: '&#63743;' },
+  { platform: 'macOS', arch: 'Intel (x64)', file: 'beguardit-darwin-x64.tar.gz', icon: '&#63743;' },
+  { platform: 'Linux', arch: 'x64', file: 'beguardit-linux-x64.tar.gz', icon: '&#128039;' },
+  { platform: 'Linux', arch: 'arm64', file: 'beguardit-linux-arm64.tar.gz', icon: '&#128039;' },
+  { platform: 'Windows', arch: 'x64', file: 'beguardit-win-x64.zip', icon: '&#11036;' },
+];
+---
+
+<BaseLayout title="Downloads" description="Download BeGuardit CLI binaries for macOS, Linux, and Windows.">
+  <div class="mx-auto max-w-3xl px-4 py-16">
+    <h1 class="text-3xl font-bold mb-2">Downloads</h1>
+    <p class="text-slate-500 mb-4">
+      Pre-built binaries for every supported platform. All releases are published on
+      <a href={RELEASES_URL} class="text-blue-600 hover:underline">GitHub Releases</a>.
+    </p>
+
+    <!-- Quick install -->
+    <div class="bg-slate-950 text-green-400 rounded-xl p-4 font-mono text-sm mb-10">
+      <p><span class="text-slate-500"># Recommended — install via npm</span></p>
+      <p>npm install -g @beguardit/cli</p>
+    </div>
+
+    <!-- Latest release -->
+    <h2 class="text-xl font-semibold mb-4">Latest Release</h2>
+    <div class="border border-slate-200 rounded-xl overflow-hidden mb-6">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <th class="px-4 py-2.5">Platform</th>
+            <th class="px-4 py-2.5">Architecture</th>
+            <th class="px-4 py-2.5">Download</th>
+            <th class="px-4 py-2.5">Checksum</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {ASSETS.map((a) => (
+            <tr class="hover:bg-slate-50">
+              <td class="px-4 py-3">
+                <span class="mr-1.5" set:html={a.icon} />
+                {a.platform}
+              </td>
+              <td class="px-4 py-3 font-mono text-xs text-slate-600">{a.arch}</td>
+              <td class="px-4 py-3">
+                <a
+                  href={`${LATEST_URL}/download/${a.file}`}
+                  class="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs font-medium"
+                >
+                  {a.file}
+                </a>
+              </td>
+              <td class="px-4 py-3">
+                <a
+                  href={`${LATEST_URL}/download/${a.file}.sha256`}
+                  class="text-slate-500 hover:text-slate-700 text-xs font-mono"
+                >
+                  SHA-256
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Verify -->
+    <div class="bg-white border border-slate-200 rounded-xl p-5 mb-10">
+      <h3 class="font-semibold text-sm mb-2">Verify download integrity</h3>
+      <div class="bg-slate-950 text-slate-300 rounded-lg p-3 font-mono text-xs space-y-1">
+        <p><span class="text-slate-500"># Download the binary and its checksum</span></p>
+        <p>curl -LO {`${LATEST_URL}/download/beguardit-linux-x64.tar.gz`}</p>
+        <p>curl -LO {`${LATEST_URL}/download/beguardit-linux-x64.tar.gz.sha256`}</p>
+        <p>&nbsp;</p>
+        <p><span class="text-slate-500"># Verify</span></p>
+        <p>sha256sum -c beguardit-linux-x64.tar.gz.sha256</p>
+      </div>
+    </div>
+
+    <!-- All releases -->
+    <div class="text-center border-t border-slate-200 pt-8">
+      <p class="text-sm text-slate-500 mb-3">Looking for an older version?</p>
+      <a
+        href={RELEASES_URL}
+        class="inline-flex items-center px-5 py-2.5 border border-slate-300 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+      >
+        View all releases on GitHub
+      </a>
+    </div>
+  </div>
+</BaseLayout>

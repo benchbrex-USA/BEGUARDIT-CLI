@@ -1,15 +1,35 @@
 // API client — typed fetch wrapper for BeGuardit backend
-// All requests go through the Vite dev proxy (/api → localhost:8000)
-
+// In development: proxied via Vite (/api → localhost:8000)
+// In production: talks to the API over HTTPS at the configured origin
 import type { ApiError } from '../types/api';
 
-const BASE = '/api/v1';
+function resolveBaseUrl(): string {
+  // VITE_API_BASE_URL overrides everything (set in .env.production)
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // In production builds, default to same-origin HTTPS
+  if (import.meta.env.PROD) {
+    return `${window.location.origin}/api/v1`;
+  }
+  // Dev: rely on Vite proxy
+  return '/api/v1';
+}
+
+const BASE = resolveBaseUrl();
 
 class ApiClient {
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers: Record<string, string> = {};
+
+    // Only set Content-Type for JSON requests (skip for FormData/multipart)
+    if (!(init?.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     const res = await fetch(`${BASE}${path}`, {
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: { ...headers, ...init?.headers },
       ...init,
     });
 
@@ -31,15 +51,28 @@ class ApiClient {
   }
 
   post<T>(path: string, body?: unknown) {
-    return this.request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
+    return this.request<T>(path, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    });
   }
 
   patch<T>(path: string, body?: unknown) {
-    return this.request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined });
+    return this.request<T>(path, {
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    });
   }
 
   delete<T>(path: string) {
     return this.request<T>(path, { method: 'DELETE' });
+  }
+
+  upload<T>(path: string, formData: FormData) {
+    return this.request<T>(path, {
+      method: 'POST',
+      body: formData,
+    });
   }
 }
 
