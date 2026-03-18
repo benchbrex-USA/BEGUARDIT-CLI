@@ -4,6 +4,7 @@ sqlalchemy==2.0.*
 alembic==1.13.*
 asyncpg
 pydantic-settings
+email-validator
 argon2-cffi
 arq==0.26.*
 redis
