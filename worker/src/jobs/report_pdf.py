@@ -17,7 +17,6 @@ from sqlalchemy import text
 
 from src.config import get_config
 from src.db import async_session_factory
-from src.jobs.report_html import generate_html_report
 
 logger = structlog.get_logger()
 

@@ -6,12 +6,11 @@
 from __future__ import annotations
 
 import os
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
-from sqlalchemy import select, text
+from sqlalchemy import text
 
 from src.config import get_config
 from src.db import async_session_factory
