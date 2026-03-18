@@ -2,11 +2,14 @@
 -- Source: ARCH-002-2026-03-17, Section 5
 -- Shared-schema multi-tenancy: every tenant-scoped table carries tenant_id.
 
+-- Ensure UUID generation is available (Supabase has pgcrypto but may not be enabled)
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- ============================================================================
 -- 5.1 Tenants and Identity
 -- ============================================================================
 
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            VARCHAR(255) NOT NULL,
     slug            VARCHAR(100) NOT NULL UNIQUE,
@@ -16,7 +19,7 @@ CREATE TABLE tenants (
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email           VARCHAR(320) NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
@@ -27,7 +30,7 @@ CREATE TABLE users (
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE TABLE memberships (
+CREATE TABLE IF NOT EXISTS memberships (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -37,10 +40,10 @@ CREATE TABLE memberships (
     UNIQUE (user_id, tenant_id)
 );
 
-CREATE INDEX idx_memberships_tenant ON memberships(tenant_id);
-CREATE INDEX idx_memberships_user   ON memberships(user_id);
+CREATE INDEX IF NOT EXISTS idx_memberships_tenant ON memberships(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_memberships_user   ON memberships(user_id);
 
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -49,14 +52,14 @@ CREATE TABLE sessions (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_sessions_user   ON sessions(user_id);
-CREATE INDEX idx_sessions_expiry ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user   ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
 
 -- ============================================================================
 -- 5.2 Assessments and Evidence
 -- ============================================================================
 
-CREATE TABLE assessment_sessions (
+CREATE TABLE IF NOT EXISTS assessment_sessions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     started_by      UUID         REFERENCES users(id),
@@ -71,10 +74,10 @@ CREATE TABLE assessment_sessions (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_assess_tenant ON assessment_sessions(tenant_id, created_at DESC);
-CREATE INDEX idx_assess_status ON assessment_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_assess_tenant ON assessment_sessions(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_assess_status ON assessment_sessions(status);
 
-CREATE TABLE assets (
+CREATE TABLE IF NOT EXISTS assets (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id      UUID         NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -84,10 +87,10 @@ CREATE TABLE assets (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_assets_session ON assets(session_id);
-CREATE INDEX idx_assets_tenant  ON assets(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_assets_session ON assets(session_id);
+CREATE INDEX IF NOT EXISTS idx_assets_tenant  ON assets(tenant_id);
 
-CREATE TABLE evidence (
+CREATE TABLE IF NOT EXISTS evidence (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id      UUID         NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -97,9 +100,9 @@ CREATE TABLE evidence (
     collected_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_evidence_session ON evidence(session_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_session ON evidence(session_id);
 
-CREATE TABLE findings (
+CREATE TABLE IF NOT EXISTS findings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id      UUID         NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -115,15 +118,15 @@ CREATE TABLE findings (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_findings_session  ON findings(session_id);
-CREATE INDEX idx_findings_severity ON findings(severity);
-CREATE INDEX idx_findings_tenant   ON findings(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_findings_session  ON findings(session_id);
+CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
+CREATE INDEX IF NOT EXISTS idx_findings_tenant   ON findings(tenant_id, created_at DESC);
 
 -- ============================================================================
 -- 5.3 Reports and Jobs
 -- ============================================================================
 
-CREATE TABLE report_jobs (
+CREATE TABLE IF NOT EXISTS report_jobs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id      UUID         NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -139,10 +142,10 @@ CREATE TABLE report_jobs (
     completed_at    TIMESTAMPTZ
 );
 
-CREATE INDEX idx_rjobs_status ON report_jobs(status) WHERE status IN ('queued', 'processing');
-CREATE INDEX idx_rjobs_tenant ON report_jobs(tenant_id, queued_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rjobs_status ON report_jobs(status) WHERE status IN ('queued', 'processing');
+CREATE INDEX IF NOT EXISTS idx_rjobs_tenant ON report_jobs(tenant_id, queued_at DESC);
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
     id              BIGSERIAL PRIMARY KEY,
     tenant_id       UUID         REFERENCES tenants(id),
     user_id         UUID         REFERENCES users(id),
@@ -154,4 +157,4 @@ CREATE TABLE audit_log (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_audit_tenant ON audit_log(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id, created_at DESC);
