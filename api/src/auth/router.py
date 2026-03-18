@@ -26,7 +26,6 @@ from src.auth.schemas import (
 from src.auth.service import login_user, logout_user, register_user, switch_tenant
 from src.core.config import get_settings
 from src.core.database import get_db
-from src.core.security import hash_token
 
 router = APIRouter(tags=["auth"])
 

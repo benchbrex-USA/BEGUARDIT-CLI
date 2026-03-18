@@ -86,7 +86,7 @@ class TenantScopingMiddleware(BaseHTTPMiddleware):
                     import hashlib
                     from datetime import datetime, timezone
 
-                    from sqlalchemy import select, text
+                    from sqlalchemy import text
 
                     from src.core.database import async_session_factory
 

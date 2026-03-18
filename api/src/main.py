@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.auth.router import router as auth_router
@@ -38,6 +38,7 @@ from src.core.middleware import (
     RequestLoggingMiddleware,
     TenantScopingMiddleware,
 )
+from src.core.database import engine
 from src.core.redis import redis_pool
 
 logger = structlog.get_logger()
@@ -46,9 +47,6 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 # Health / readiness router (§6.7)
 # ---------------------------------------------------------------------------
-
-from fastapi import APIRouter
-from src.core.database import engine
 
 health_router = APIRouter(tags=["health"])
 

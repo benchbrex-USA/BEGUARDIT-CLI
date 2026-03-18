@@ -25,8 +25,10 @@ class TestWorkerConfigDefaults:
         assert cfg.REPORT_STORAGE_PATH == "/data/reports"
 
     def test_log_level_default(self):
-        cfg = WorkerConfig()
-        assert cfg.LOG_LEVEL == "INFO"
+        # Clear LOG_LEVEL from env (CI sets it to WARNING) to test true default
+        with mock.patch.dict(os.environ, {k: v for k, v in os.environ.items() if k != "LOG_LEVEL"}, clear=True):
+            cfg = WorkerConfig()
+            assert cfg.LOG_LEVEL == "INFO"
 
     def test_max_jobs_default(self):
         cfg = WorkerConfig()

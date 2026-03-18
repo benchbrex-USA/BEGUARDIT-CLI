@@ -1,16 +1,22 @@
 # Tests for src.core.config — Settings
+import os
+from unittest import mock
+
 import pytest
 from src.core.config import Settings
 
 
 class TestSettings:
     def test_defaults(self):
-        s = Settings(DATABASE_URL="postgresql+asyncpg://x:y@localhost/db")
-        assert s.SESSION_TTL_SECONDS == 86400
-        assert s.RATE_LIMIT_DEFAULT == 100
-        assert s.RATE_LIMIT_LOGIN == 10
-        assert s.LOG_LEVEL == "INFO"
-        assert s.BCRYPT_ROUNDS == 12
+        # Clear env vars that CI sets so we test true defaults
+        env = {k: v for k, v in os.environ.items() if k not in ("LOG_LEVEL",)}
+        with mock.patch.dict(os.environ, env, clear=True):
+            s = Settings(DATABASE_URL="postgresql+asyncpg://x:y@localhost/db")
+            assert s.SESSION_TTL_SECONDS == 86400
+            assert s.RATE_LIMIT_DEFAULT == 100
+            assert s.RATE_LIMIT_LOGIN == 10
+            assert s.LOG_LEVEL == "INFO"
+            assert s.BCRYPT_ROUNDS == 12
 
     def test_cors_origins_list_single(self):
         s = Settings(

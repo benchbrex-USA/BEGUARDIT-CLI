@@ -20,7 +20,7 @@ from src.core.database import get_db
 from src.core.exceptions import ForbiddenError
 from src.reports.dependencies import get_report_job_or_404
 from src.reports.models import ReportJob
-from src.reports.schemas import CreateReportRequest, ReportJobOut, MessageResponse
+from src.reports.schemas import CreateReportRequest, ReportJobOut
 from src.reports.service import create_report_job, list_report_jobs
 
 router = APIRouter(tags=["reports"])

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.admin.models import AuditLog
 from src.auth.models import Membership, User
-from src.core.exceptions import ForbiddenError, NotFoundError, ValidationError
+from src.core.exceptions import ForbiddenError, NotFoundError
 
 logger = structlog.get_logger()
 
@@ -37,7 +37,7 @@ async def list_users(
     )
 
     if is_active is not None:
-        base = base.where(User.is_active == is_active)
+        base = base.where(User.is_active.is_(is_active))
 
     # Count
     count_q = select(func.count()).select_from(base.subquery())
@@ -115,7 +115,7 @@ async def update_user(
             .where(
                 Membership.tenant_id == tenant_id,
                 Membership.role == "admin",
-                User.is_active == True,
+                User.is_active.is_(True),
             )
         )).scalar_one()
         if admin_count <= 1:
