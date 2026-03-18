@@ -18,6 +18,17 @@ function resolveBaseUrl(): string {
 
 const BASE = resolveBaseUrl();
 
+/** Read the csrf_token cookie set by the API on login/register. */
+function getCsrfToken(): string | undefined {
+  const match = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('csrf_token='));
+  return match ? decodeURIComponent(match.split('=')[1]) : undefined;
+}
+
+/** HTTP methods that require a CSRF token header. */
+const CSRF_METHODS = new Set(['POST', 'PATCH', 'DELETE']);
+
 class ApiClient {
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers: Record<string, string> = {};
@@ -25,6 +36,15 @@ class ApiClient {
     // Only set Content-Type for JSON requests (skip for FormData/multipart)
     if (!(init?.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
+    }
+
+    // Attach CSRF token for state-changing requests
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (CSRF_METHODS.has(method)) {
+      const csrf = getCsrfToken();
+      if (csrf) {
+        headers['X-CSRF-Token'] = csrf;
+      }
     }
 
     const res = await fetch(`${BASE}${path}`, {

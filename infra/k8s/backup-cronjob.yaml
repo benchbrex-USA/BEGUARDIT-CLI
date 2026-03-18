@@ -1,0 +1,92 @@
+# K8s CronJob — daily PostgreSQL backup at 02:00 UTC
+# Source: ARCH-002-2026-03-17, Fix 7 (Backup & DR Documentation)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: beguardit
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/component: backup
+    app.kubernetes.io/part-of: beguardit
+spec:
+  schedule: "0 2 * * *"
+  timeZone: "Etc/UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: postgres-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-sa
+          containers:
+            - name: pg-backup
+              image: postgres:16-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
+                  DUMP_FILE="/tmp/beguardit_${TIMESTAMP}.dump"
+
+                  echo "[backup] Starting pg_dump at $(date -u)"
+                  pg_dump \
+                    --host="$PGHOST" \
+                    --username="$PGUSER" \
+                    --dbname="$PGDATABASE" \
+                    --format=custom \
+                    --compress=9 \
+                    --verbose \
+                    --file="$DUMP_FILE"
+
+                  echo "[backup] Uploading to S3"
+                  aws s3 cp "$DUMP_FILE" \
+                    "s3://${BACKUP_S3_BUCKET}/postgres/daily/beguardit_${TIMESTAMP}.dump" \
+                    --storage-class STANDARD_IA \
+                    --sse aws:kms
+
+                  # Also update the LATEST pointer
+                  aws s3 cp "$DUMP_FILE" \
+                    "s3://${BACKUP_S3_BUCKET}/postgres/daily/beguardit_LATEST.dump" \
+                    --storage-class STANDARD_IA \
+                    --sse aws:kms
+
+                  rm -f "$DUMP_FILE"
+                  echo "[backup] Completed at $(date -u)"
+              env:
+                - name: PGHOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: beguardit-db-credentials
+                      key: host
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: beguardit-db-credentials
+                      key: backup-username
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: beguardit-db-credentials
+                      key: backup-password
+                - name: PGDATABASE
+                  value: beguardit
+                - name: BACKUP_S3_BUCKET
+                  value: beguardit-backups
+                - name: AWS_DEFAULT_REGION
+                  value: us-east-1
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi

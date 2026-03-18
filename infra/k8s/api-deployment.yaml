@@ -34,6 +34,43 @@ spec:
           envFrom:
             - secretRef:
                 name: beguardit-secrets
+          env:
+            - name: STORAGE_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: beguardit-secrets
+                  key: STORAGE_BACKEND
+                  optional: true
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: beguardit-secrets
+                  key: S3_BUCKET
+                  optional: true
+            - name: S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: beguardit-secrets
+                  key: S3_REGION
+                  optional: true
+            - name: S3_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: beguardit-secrets
+                  key: S3_ENDPOINT_URL
+                  optional: true
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: beguardit-secrets
+                  key: S3_ACCESS_KEY_ID
+                  optional: true
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: beguardit-secrets
+                  key: S3_SECRET_ACCESS_KEY
+                  optional: true
           resources:
             requests:
               cpu: 250m

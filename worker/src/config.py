@@ -15,6 +15,14 @@ class WorkerConfig(BaseSettings):
     REPORT_STORAGE_PATH: str = "/data/reports"
     LOG_LEVEL: str = "INFO"
 
+    # Object storage (S3 / R2) — ARCH-002 Patch, Fix 1
+    STORAGE_BACKEND: str = "local"          # "local" or "s3"
+    S3_BUCKET: str = ""
+    S3_REGION: str = "us-east-1"
+    S3_ENDPOINT_URL: str = ""               # Set for R2 / MinIO
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
+
     # Job defaults
     MAX_JOBS: int = 10
     JOB_TIMEOUT: int = 300       # 5 minutes default

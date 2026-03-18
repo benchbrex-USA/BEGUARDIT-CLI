@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.assessments.dependencies import pagination_params
@@ -106,9 +106,26 @@ async def download_report(
         "json": "application/json",
         "sarif": "application/json",
     }
+    filename = f"beguardit-report-{job.id}.{job.format}"
 
+    from src.core.config import get_settings
+    settings = get_settings()
+
+    if settings.STORAGE_BACKEND.lower() == "s3":
+        # Redirect to a presigned S3/R2 URL
+        from src.core.storage import get_storage
+        storage = get_storage()
+        presigned_url = await storage.get_presigned_url(job.output_path, expires_in=3600)
+        return RedirectResponse(
+            url=presigned_url,
+            status_code=302,
+            headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+        )
+
+    # Local storage: stream from filesystem
     return FileResponse(
         path=job.output_path,
         media_type=media_types.get(job.format, "application/octet-stream"),
-        filename=f"beguardit-report-{job.id}.{job.format}",
+        filename=filename,
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
     )

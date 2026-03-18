@@ -15,9 +15,12 @@ CREATE TABLE IF NOT EXISTS tenants (
     slug            VARCHAR(100) NOT NULL UNIQUE,
     plan            VARCHAR(50)  NOT NULL DEFAULT 'free',
     settings        JSONB        NOT NULL DEFAULT '{}',
+    deleted_at      TIMESTAMPTZ,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_tenants_deleted_at ON tenants(deleted_at) WHERE deleted_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,6 +51,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id         UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     token_hash      VARCHAR(255) NOT NULL UNIQUE,
+    csrf_token      VARCHAR(255),
     expires_at      TIMESTAMPTZ  NOT NULL,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -158,3 +162,59 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id, created_at DESC);
+
+-- ============================================================================
+-- 5.4 Password Reset Tokens
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash      VARCHAR(255) NOT NULL UNIQUE,
+    expires_at      TIMESTAMPTZ  NOT NULL,
+    used_at         TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_prt_user   ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_prt_expiry ON password_reset_tokens(expires_at) WHERE used_at IS NULL;
+
+-- ============================================================================
+-- 5.5 Data Export Jobs (GDPR)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS data_export_jobs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    requested_by    UUID         NOT NULL REFERENCES users(id),
+    status          VARCHAR(30)  NOT NULL DEFAULT 'queued',
+    output_path     VARCHAR(1000),
+    error_message   TEXT,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    completed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_dej_tenant ON data_export_jobs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_dej_status ON data_export_jobs(status) WHERE status IN ('queued', 'processing');
+
+-- ============================================================================
+-- Auto-update updated_at triggers
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_tenants_updated_at
+    BEFORE UPDATE ON tenants
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();

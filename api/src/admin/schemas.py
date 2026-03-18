@@ -43,3 +43,24 @@ class AuditLogOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── Data export (GDPR) ──────────────────────────────────────────────
+
+class DataExportJobOut(BaseModel):
+    """Response for a queued data export job."""
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    requested_by: uuid.UUID
+    status: str
+    output_path: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Tenant deletion ─────────────────────────────────────────────────
+
+class DeleteTenantRequest(BaseModel):
+    """Confirmation payload for tenant soft-delete."""
+    confirm_slug: str = Field(..., description="Must match the tenant slug to confirm deletion.")

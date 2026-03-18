@@ -56,3 +56,12 @@ def generate_session_token() -> str:
 def hash_token(token: str) -> str:
     """SHA-256 hash of a session token for DB storage."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# CSRF tokens (Fix 3 — ARCH-002)
+# ---------------------------------------------------------------------------
+
+def generate_csrf_token() -> str:
+    """Generate a cryptographically random CSRF token (URL-safe, 32 bytes)."""
+    return secrets.token_urlsafe(32)

@@ -1,6 +1,7 @@
 # Admin domain — router
-# Endpoints: GET /users, PATCH /users/:id, GET /audit-log
-# Source: ARCH-002-2026-03-17, Section 6.6
+# Endpoints: GET /users, PATCH /users/:id, GET /audit-log,
+#            POST /data-export, DELETE /tenant
+# Source: ARCH-002-2026-03-17, Section 6.6 + Fix 9
 from __future__ import annotations
 
 import uuid
@@ -9,8 +10,21 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.admin.dependencies import require_admin
-from src.admin.schemas import AdminUserOut, AuditLogOut, UpdateUserRequest
-from src.admin.service import create_audit_entry, list_audit_logs, list_users, update_user
+from src.admin.schemas import (
+    AdminUserOut,
+    AuditLogOut,
+    DataExportJobOut,
+    DeleteTenantRequest,
+    UpdateUserRequest,
+)
+from src.admin.service import (
+    create_audit_entry,
+    create_data_export_job,
+    list_audit_logs,
+    list_users,
+    soft_delete_tenant,
+    update_user,
+)
 from src.assessments.schemas import PaginatedResponse
 from src.auth.dependencies import get_current_user
 from src.auth.models import Session, User
@@ -116,4 +130,83 @@ async def get_audit_log(
         total=total,
         offset=offset,
         limit=limit,
+    )
+
+
+# ── Data export (GDPR, Fix 9.1) ─────────────────────────────────────
+
+@router.post(
+    "/data-export",
+    response_model=DataExportJobOut,
+    status_code=202,
+    dependencies=[Depends(require_admin)],
+)
+async def request_data_export(
+    user_session: tuple[User, Session] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Queue a GDPR data export for the current tenant. Requires admin role.
+
+    Creates a data_export_jobs record with status='queued'. The worker
+    picks up the job asynchronously and produces a ZIP archive containing
+    all tenant data as JSON files.
+    """
+    user, session = user_session
+
+    job = await create_data_export_job(
+        db,
+        tenant_id=session.tenant_id,
+        requested_by=user.id,
+    )
+
+    # Audit the export request
+    await create_audit_entry(
+        db,
+        tenant_id=session.tenant_id,
+        user_id=user.id,
+        action="data_export.requested",
+        resource_type="data_export_job",
+        resource_id=str(job.id),
+    )
+
+    return DataExportJobOut.model_validate(job)
+
+
+# ── Tenant soft-delete (GDPR, Fix 9.2) ──────────────────────────────
+
+@router.delete(
+    "/tenant",
+    status_code=204,
+    dependencies=[Depends(require_admin)],
+)
+async def delete_tenant(
+    body: DeleteTenantRequest,
+    user_session: tuple[User, Session] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete the current tenant. Requires admin role.
+
+    The request body must include confirm_slug matching the tenant's slug
+    as a safety measure.  Sets deleted_at on the tenant and deactivates
+    all memberships.  After 30 days, a worker cron job hard-deletes the
+    tenant and all associated data.
+    """
+    user, session = user_session
+
+    await soft_delete_tenant(
+        db,
+        tenant_id=session.tenant_id,
+        confirm_slug=body.confirm_slug,
+        acting_user_id=user.id,
+    )
+
+    # Audit the deletion
+    await create_audit_entry(
+        db,
+        tenant_id=session.tenant_id,
+        user_id=user.id,
+        action="tenant.deleted",
+        resource_type="tenant",
+        resource_id=str(session.tenant_id),
+        detail={"confirm_slug": body.confirm_slug},
     )

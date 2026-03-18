@@ -9,6 +9,7 @@ arq==0.26.*
 redis
 httpx==0.27.*
 structlog
+aioboto3
 ruff
 pytest
 pytest-asyncio

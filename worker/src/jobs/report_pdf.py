@@ -8,15 +8,14 @@
 # Falls back to raw HTML if weasyprint is not installed.
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
 from sqlalchemy import text
 
-from src.config import get_config
 from src.db import async_session_factory
+from src.storage import get_storage
 
 logger = structlog.get_logger()
 
@@ -27,7 +26,6 @@ async def generate_pdf_report(ctx: dict, *, job_id: str, session_id: str, tenant
     Idempotency (§9.3): if the job is already completed and the file exists,
     skip regeneration.
     """
-    config = get_config()
     log = logger.bind(job_id=job_id, session_id=session_id)
 
     async with async_session_factory() as db:
@@ -37,8 +35,11 @@ async def generate_pdf_report(ctx: dict, *, job_id: str, session_id: str, tenant
             {"id": job_id, "tid": tenant_id},
         )).first()
 
+        storage = get_storage()
+        storage_key = f"{tenant_id}/{job_id}.pdf"
+
         if job_row and job_row.status == "completed" and job_row.output_path:
-            if os.path.exists(job_row.output_path):
+            if await storage.exists(storage_key):
                 log.info("idempotent_skip", output_path=job_row.output_path)
                 return {"status": "already_completed", "output_path": job_row.output_path}
 
@@ -100,20 +101,21 @@ async def generate_pdf_report(ctx: dict, *, job_id: str, session_id: str, tenant
                 session_id=session_id,
             )
 
-            # Step 2: convert HTML → PDF
-            report_dir = Path(config.REPORT_STORAGE_PATH) / str(tenant_id)
-            report_dir.mkdir(parents=True, exist_ok=True)
-            output_path = str(report_dir / f"{job_id}.pdf")
-
+            # Step 2: convert HTML → PDF and upload to storage
             try:
                 from weasyprint import HTML as WeasyprintHTML
-                WeasyprintHTML(string=html_content).write_pdf(output_path)
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
+                    WeasyprintHTML(string=html_content).write_pdf(tmp.name)
+                    pdf_bytes = Path(tmp.name).read_bytes()
+                await storage.upload(storage_key, pdf_bytes, content_type="application/pdf")
+                output_path = storage_key
                 log.info("pdf_generated_weasyprint", output_path=output_path)
             except ImportError:
-                # Fallback: save as HTML with .pdf extension (degraded mode)
-                output_path = str(report_dir / f"{job_id}.html")
-                with open(output_path, "w", encoding="utf-8") as f:
-                    f.write(html_content)
+                # Fallback: save as HTML (degraded mode)
+                fallback_key = f"{tenant_id}/{job_id}.html"
+                await storage.upload(fallback_key, html_content.encode("utf-8"), content_type="text/html")
+                output_path = fallback_key
                 log.warning("pdf_fallback_html", reason="weasyprint not installed")
 
             # ── Mark completed ────────────────────────────────────────

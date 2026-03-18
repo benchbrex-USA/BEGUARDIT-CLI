@@ -68,3 +68,21 @@ class AuthResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Password reset schemas
+# ---------------------------------------------------------------------------
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
+class PasswordResetResponse(BaseModel):
+    message: str
+    token: str | None = None  # only populated in dev mode

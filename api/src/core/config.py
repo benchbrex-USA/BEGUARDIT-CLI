@@ -1,5 +1,7 @@
 # Core — application settings via pydantic-settings
 # Source: ARCH-002-2026-03-17, Section 14.2
+from __future__ import annotations
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,8 +23,16 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173"
 
-    # Worker
+    # Worker / Report storage
     REPORT_STORAGE_PATH: str = "/data/reports"
+
+    # Object storage (S3 / R2) — ARCH-002 Patch, Fix 1
+    STORAGE_BACKEND: str = "local"          # "local" or "s3"
+    S3_BUCKET: str = ""
+    S3_REGION: str = "us-east-1"
+    S3_ENDPOINT_URL: str = ""               # Set for R2 / MinIO
+    S3_ACCESS_KEY_ID: str = ""
+    S3_SECRET_ACCESS_KEY: str = ""
 
     # Logging
     LOG_LEVEL: str = "INFO"

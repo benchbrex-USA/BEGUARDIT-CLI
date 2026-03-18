@@ -4,6 +4,7 @@ asyncpg
 redis
 jinja2
 structlog
+aioboto3
 pydantic-settings
 pytest
 pytest-asyncio

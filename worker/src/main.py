@@ -10,10 +10,15 @@
 #   generate_sarif_export — §9.2, timeout 2min, retries 3
 from __future__ import annotations
 
+import os
+from datetime import datetime, timezone
+
 import structlog
 from arq.connections import RedisSettings
+from arq.cron import cron
 
 from src.config import get_config
+from src.jobs.partition_maintenance import partition_maintenance
 from src.jobs.report_html import generate_html_report
 from src.jobs.report_pdf import generate_pdf_report
 from src.jobs.report_sarif import generate_sarif_export
@@ -36,13 +41,46 @@ def _parse_redis_settings() -> RedisSettings:
     )
 
 
+_HEARTBEAT_KEY = "beguardit:worker:heartbeat"
+_HEARTBEAT_EXPIRE_SECONDS = 60
+
+
+async def _set_heartbeat(redis) -> None:  # noqa: ANN001
+    """Write heartbeat hash to Redis with an expiry."""
+    await redis.hset(
+        _HEARTBEAT_KEY,
+        mapping={
+            "last_seen": datetime.now(timezone.utc).isoformat(),
+            "pid": str(os.getpid()),
+        },
+    )
+    await redis.expire(_HEARTBEAT_KEY, _HEARTBEAT_EXPIRE_SECONDS)
+
+
+async def heartbeat_refresh(ctx: dict) -> None:
+    """Cron callback — refresh heartbeat every 30 seconds."""
+    redis = ctx.get("redis") or ctx.get("pool")
+    if redis:
+        await _set_heartbeat(redis)
+        logger.debug("worker_heartbeat_refreshed")
+
+
 async def startup(ctx: dict) -> None:
     """Called once when the worker starts."""
+    # Set initial heartbeat
+    redis = ctx.get("redis") or ctx.get("pool")
+    if redis:
+        await _set_heartbeat(redis)
     logger.info("worker_startup", max_jobs=_config.MAX_JOBS)
 
 
 async def shutdown(ctx: dict) -> None:
     """Called once when the worker shuts down."""
+    # Remove heartbeat key so the API readiness check detects shutdown
+    redis = ctx.get("redis") or ctx.get("pool")
+    if redis:
+        await redis.delete(_HEARTBEAT_KEY)
+
     from src.db import engine
 
     await engine.dispose()
@@ -68,6 +106,26 @@ class WorkerSettings:
         generate_html_report,
         generate_pdf_report,
         generate_sarif_export,
+        partition_maintenance,
+    ]
+
+    # Cron jobs
+    cron_jobs = [
+        # Partition maintenance — 1st of each month at 03:00 UTC
+        cron(
+            partition_maintenance,
+            month={1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12},
+            day={1},
+            hour={3},
+            minute={0},
+            unique=True,
+        ),
+        # Worker heartbeat — every 30 seconds
+        cron(
+            heartbeat_refresh,
+            second={0, 30},
+            unique=True,
+        ),
     ]
 
     on_startup = startup

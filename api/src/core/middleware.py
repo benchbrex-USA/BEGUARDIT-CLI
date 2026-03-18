@@ -158,14 +158,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if current == 1:
             await self.redis_pool.expire(key, window)
 
+        ttl = await self.redis_pool.ttl(key)
+        # ttl can be -1 (no expiry) or -2 (key gone); default to full window
+        ttl = ttl if ttl > 0 else window
+        remaining = max(limit - current, 0)
+        reset_at = int(time.time()) + ttl
+
+        rate_headers = {
+            "X-RateLimit-Limit": str(limit),
+            "X-RateLimit-Remaining": str(remaining),
+            "X-RateLimit-Reset": str(reset_at),
+        }
+
         if current > limit:
-            ttl = await self.redis_pool.ttl(key)
             return Response(
                 content='{"error":{"code":"RATE_LIMITED","message":"Too many requests. Try again later.","detail":null}}',
                 status_code=429,
                 media_type="application/json",
-                headers={"Retry-After": str(max(ttl, 1))},
+                headers={**rate_headers, "Retry-After": str(max(ttl, 1))},
             )
 
         response = await call_next(request)
+        for header, value in rate_headers.items():
+            response.headers[header] = value
         return response

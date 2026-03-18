@@ -5,15 +5,13 @@
 # Idempotent: checks for existing completed output before processing (§9.3)
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 import structlog
 from sqlalchemy import text
 
-from src.config import get_config
 from src.db import async_session_factory
+from src.storage import get_storage
 
 logger = structlog.get_logger()
 
@@ -33,7 +31,6 @@ async def generate_html_report(ctx: dict, *, job_id: str, session_id: str, tenan
     Idempotency (§9.3): if the job already has status='completed' and the
     output file exists on disk, we skip regeneration and return early.
     """
-    config = get_config()
     log = logger.bind(job_id=job_id, session_id=session_id)
 
     async with async_session_factory() as db:
@@ -43,8 +40,11 @@ async def generate_html_report(ctx: dict, *, job_id: str, session_id: str, tenan
             {"id": job_id, "tid": tenant_id},
         )).first()
 
+        storage = get_storage()
+        storage_key = f"{tenant_id}/{job_id}.html"
+
         if job_row and job_row.status == "completed" and job_row.output_path:
-            if os.path.exists(job_row.output_path):
+            if await storage.exists(storage_key):
                 log.info("idempotent_skip", output_path=job_row.output_path)
                 return {"status": "already_completed", "output_path": job_row.output_path}
 
@@ -106,13 +106,9 @@ async def generate_html_report(ctx: dict, *, job_id: str, session_id: str, tenan
                 session_id=session_id,
             )
 
-            # ── Write to disk ─────────────────────────────────────────
-            report_dir = Path(config.REPORT_STORAGE_PATH) / str(tenant_id)
-            report_dir.mkdir(parents=True, exist_ok=True)
-            output_path = str(report_dir / f"{job_id}.html")
-
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(html)
+            # ── Write to storage ──────────────────────────────────────
+            await storage.upload(storage_key, html.encode("utf-8"), content_type="text/html")
+            output_path = storage_key
 
             # ── Mark completed ────────────────────────────────────────
             await db.execute(

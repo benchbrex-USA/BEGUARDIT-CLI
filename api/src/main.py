@@ -9,6 +9,7 @@
 #   1. RequestLoggingMiddleware  — correlation ID, method, path, status, duration
 #   2. CORSMiddleware           — restrict to portal domain, no wildcard
 #   3. TenantScopingMiddleware  — initialise tenant/user state on request
+#   3.5 CSRFMiddleware          — validate X-CSRF-Token on POST/PATCH/DELETE
 #   4. RateLimitMiddleware      — Redis sliding window (100/min default, 10/min login)
 #
 # Routers (§6 — full endpoint catalogue):
@@ -33,6 +34,7 @@ from src.upload.router import router as upload_router
 from src.admin.router import router as admin_router
 from src.core.config import get_settings
 from src.core.exceptions import register_exception_handlers
+from src.core.csrf import CSRFMiddleware
 from src.core.middleware import (
     RateLimitMiddleware,
     RequestLoggingMiddleware,
@@ -79,10 +81,14 @@ async def readiness():
     except Exception:
         logger.warning("readiness_check_failed", component="redis")
 
-    # Worker — check if ARQ queue has active workers
+    # Worker — check heartbeat key set by the ARQ worker
     try:
-        info = await redis_pool.info("clients")
-        checks["worker"] = info.get("connected_clients", 0) > 1
+        from datetime import datetime, timezone
+
+        heartbeat = await redis_pool.hgetall("beguardit:worker:heartbeat")
+        if heartbeat and heartbeat.get("last_seen"):
+            last_seen = datetime.fromisoformat(heartbeat["last_seen"])
+            checks["worker"] = (datetime.now(timezone.utc) - last_seen).total_seconds() < 90
     except Exception:
         logger.warning("readiness_check_failed", component="worker")
 
@@ -112,13 +118,16 @@ def create_app() -> FastAPI:
     # executes first.
     # ------------------------------------------------------------------
 
-    # 4. Rate limiting (innermost — runs last)
+    # 5. Rate limiting (innermost — runs last)
     app.add_middleware(
         RateLimitMiddleware,
         redis_pool=redis_pool,
         default_limit=settings.RATE_LIMIT_DEFAULT,
         login_limit=settings.RATE_LIMIT_LOGIN,
     )
+
+    # 4. CSRF protection
+    app.add_middleware(CSRFMiddleware)
 
     # 3. Tenant scoping
     app.add_middleware(TenantScopingMiddleware)
@@ -129,7 +138,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+        allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-CSRF-Token"],
     )
 
     # 1. Request logging (outermost — runs first)

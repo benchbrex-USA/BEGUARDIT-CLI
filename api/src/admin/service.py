@@ -9,9 +9,9 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.admin.models import AuditLog
-from src.auth.models import Membership, User
-from src.core.exceptions import ForbiddenError, NotFoundError
+from src.admin.models import AuditLog, DataExportJob
+from src.auth.models import Membership, Tenant, User
+from src.core.exceptions import ForbiddenError, NotFoundError, ValidationError
 
 logger = structlog.get_logger()
 
@@ -204,3 +204,92 @@ async def create_audit_entry(
     await db.commit()
     await db.refresh(entry)
     return entry
+
+
+# ── Data export (GDPR) ───────────────────────────────────────────────
+
+async def create_data_export_job(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    requested_by: uuid.UUID,
+) -> DataExportJob:
+    """Queue a new data export job for the given tenant.
+
+    Returns the created job record with status='queued'.
+    """
+    job = DataExportJob(
+        tenant_id=tenant_id,
+        requested_by=requested_by,
+        status="queued",
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    logger.info(
+        "data_export_job_queued",
+        job_id=str(job.id),
+        tenant_id=str(tenant_id),
+        requested_by=str(requested_by),
+    )
+    return job
+
+
+# ── Tenant soft-delete ───────────────────────────────────────────────
+
+async def soft_delete_tenant(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    confirm_slug: str,
+    acting_user_id: uuid.UUID,
+) -> None:
+    """Soft-delete a tenant by setting deleted_at.
+
+    Validates that confirm_slug matches the tenant's actual slug as a
+    safety check.  Deactivates all memberships for the tenant.
+
+    Raises:
+        NotFoundError: if the tenant does not exist.
+        ValidationError: if confirm_slug does not match.
+        ForbiddenError: if the tenant is already deleted.
+    """
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.id == tenant_id)
+    )).scalar_one_or_none()
+
+    if not tenant:
+        raise NotFoundError("Tenant not found.")
+
+    if tenant.deleted_at is not None:
+        raise ForbiddenError("Tenant is already marked for deletion.")
+
+    if tenant.slug != confirm_slug:
+        raise ValidationError(
+            "confirm_slug does not match the tenant slug.",
+            detail={"expected": tenant.slug, "received": confirm_slug},
+        )
+
+    # Soft-delete
+    tenant.deleted_at = datetime.now(timezone.utc)
+    tenant.updated_at = datetime.now(timezone.utc)
+
+    # Deactivate all memberships
+    memberships = (await db.execute(
+        select(Membership).where(Membership.tenant_id == tenant_id)
+    )).scalars().all()
+
+    for m in memberships:
+        # We set role to 'viewer' to revoke admin/operator access immediately
+        m.role = "viewer"
+
+    await db.commit()
+
+    logger.info(
+        "tenant_soft_deleted",
+        tenant_id=str(tenant_id),
+        slug=tenant.slug,
+        acting_user_id=str(acting_user_id),
+        memberships_deactivated=len(memberships),
+    )
