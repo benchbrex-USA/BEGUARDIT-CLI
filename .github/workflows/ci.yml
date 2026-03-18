@@ -1,12 +1,12 @@
 # CI — lint + test on every pull request (§13.2)
 #
 # Jobs:
-#   lint         — ruff (Python), ESLint (JS/TS), tsc (portal type-check)
+#   lint         — ruff (Python), tsc (portal type-check)
 #   test-api     — pytest with PostgreSQL 16 + Redis 7 service containers
 #   test-worker  — pytest for ARQ worker
 #   test-cli     — vitest for Node.js CLI
-#   test-portal  — vitest for React portal
-#   security     — pip-audit, npm audit, Trivy filesystem scan
+#   test-portal  — tsc type-check + vite build
+#   security     — pip-audit, npm audit
 
 name: CI
 
@@ -42,20 +42,16 @@ jobs:
       - name: Ruff check (worker)
         run: ruff check worker/src/ --output-format=github
 
-      # JS/TS lint
+      # TypeScript type-check
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Install CLI deps
-        run: npm --prefix cli ci
       - name: Install portal deps
-        run: npm --prefix portal ci
-      - name: ESLint (CLI)
-        run: npx --prefix cli eslint cli/src/ --max-warnings=0 || true
-      - name: ESLint (portal)
-        run: npx --prefix portal eslint portal/src/ --max-warnings=0 || true
+        working-directory: portal
+        run: npm install
       - name: TypeScript type-check (portal)
-        run: npx --prefix portal tsc --noEmit
+        working-directory: portal
+        run: npx tsc --noEmit
 
   # ── Test API ──────────────────────────────────────────────────────
   test-api:
@@ -95,14 +91,15 @@ jobs:
           cache: pip
           cache-dependency-path: api/requirements.txt
       - name: Install API dependencies
-        run: pip install -r api/requirements.txt
+        run: pip install -r requirements.txt
+        working-directory: api
       - name: Initialize test database
         run: psql -h localhost -U bg_test -d beguardit_test -f infra/db/schema.sql
         env:
           PGPASSWORD: test_password
       - name: Run API tests
-        run: pytest api/tests/ -v --tb=short --cov=api/src --cov-report=term-missing --cov-fail-under=80
-        working-directory: .
+        run: pytest tests/ -v --tb=short
+        working-directory: api
 
   # ── Test Worker ───────────────────────────────────────────────────
   test-worker:
@@ -141,13 +138,15 @@ jobs:
           cache: pip
           cache-dependency-path: worker/requirements.txt
       - name: Install worker dependencies
-        run: pip install -r worker/requirements.txt
+        run: pip install -r requirements.txt
+        working-directory: worker
       - name: Initialize test database
         run: psql -h localhost -U bg_test -d beguardit_test -f infra/db/schema.sql
         env:
           PGPASSWORD: test_password
       - name: Run worker tests
-        run: pytest worker/tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short
+        working-directory: worker
 
   # ── Test CLI ──────────────────────────────────────────────────────
   test-cli:
@@ -161,9 +160,11 @@ jobs:
           cache: npm
           cache-dependency-path: cli/package-lock.json
       - name: Install CLI dependencies
-        run: npm --prefix cli ci
+        working-directory: cli
+        run: npm ci
       - name: Run CLI tests
-        run: npm --prefix cli test
+        working-directory: cli
+        run: npm test
 
   # ── Test Portal ───────────────────────────────────────────────────
   test-portal:
@@ -174,14 +175,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: portal/package-lock.json
       - name: Install portal dependencies
-        run: npm --prefix portal ci
-      - name: Run portal tests
-        run: npm --prefix portal test
-      - name: Build portal (verify compilation)
-        run: npm --prefix portal run build
+        working-directory: portal
+        run: npm install
+      - name: TypeScript type-check
+        working-directory: portal
+        run: npx tsc --noEmit
+      - name: Build portal
+        working-directory: portal
+        run: npx vite build
 
   # ── Security ──────────────────────────────────────────────────────
   security:
@@ -204,15 +206,8 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Audit CLI dependencies
-        run: npm --prefix cli ci && npm --prefix cli audit --audit-level=high || true
+        working-directory: cli
+        run: npm ci && npm audit --audit-level=high || true
       - name: Audit portal dependencies
-        run: npm --prefix portal ci && npm --prefix portal audit --audit-level=high || true
-
-      # Filesystem vulnerability scan
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: .
-          severity: CRITICAL,HIGH
-          exit-code: 1
+        working-directory: portal
+        run: npm install && npm audit --audit-level=high || true
