@@ -11,10 +11,10 @@
 #   REDIS_URL            — Redis connection string for target env
 #   SECRET_KEY           — API session signing key
 #
-# Required vars (per environment):
-#   API_HOST             — e.g. api.beguardit.com
-#   PORTAL_HOST          — e.g. app.beguardit.com
-#   CORS_ORIGINS         — e.g. https://app.beguardit.com
+# Optional vars (per environment, if your cluster/manifests consume them):
+#   API_HOST             — e.g. beguardit.xyz
+#   PORTAL_HOST          — e.g. beguardit.xyz
+#   CORS_ORIGINS         — e.g. https://beguardit.xyz
 
 name: Deploy
 
@@ -110,7 +110,7 @@ jobs:
           cache-from: type=gha,scope=portal
           cache-to: type=gha,mode=max,scope=portal
           build-args: |
-            VITE_API_BASE_URL=https://${{ vars.API_HOST }}/api/v1
+            VITE_API_BASE_URL=/api/v1
 
       # Site image
       - name: Build & push Site image
