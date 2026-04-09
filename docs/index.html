@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BeGuardit CLI — Terminal-First Security Assessment Platform</title>
+<meta name="description" content="Zero-footprint cybersecurity and AI security assessment platform. Collect, analyze, and remediate from your terminal.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1f6e1;</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0b1120;--surface:#111827;--surface2:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#0ea5e9;--accent2:#38bdf8;--green:#22c55e;--orange:#f97316;--red:#ef4444;--purple:#a855f7}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,monospace;background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden}
+a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+
+/* Nav */
+nav{position:fixed;top:0;width:100%;background:rgba(11,17,32,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:100;padding:0 2rem}
+nav .inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px}
+nav .logo{font-weight:800;font-size:1.1rem;color:#fff;letter-spacing:-.5px}
+nav .logo span{color:var(--accent)}
+nav ul{list-style:none;display:flex;gap:1.5rem}
+nav ul a{color:var(--muted);font-size:.85rem;font-weight:500;transition:color .2s}
+nav ul a:hover{color:#fff;text-decoration:none}
+.cta-btn{display:inline-block;padding:.5rem 1.2rem;background:var(--accent);color:#fff;border-radius:6px;font-weight:600;font-size:.85rem;transition:background .2s}
+.cta-btn:hover{background:var(--accent2);text-decoration:none}
+
+/* Hero */
+.hero{padding:10rem 2rem 5rem;text-align:center;position:relative}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:800px;height:600px;background:radial-gradient(ellipse,rgba(14,165,233,.08) 0%,transparent 70%);pointer-events:none}
+.hero h1{font-size:3.5rem;font-weight:800;letter-spacing:-1.5px;margin-bottom:1rem;background:linear-gradient(135deg,#fff 0%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero .subtitle{font-size:1.25rem;color:var(--muted);max-width:640px;margin:0 auto 2.5rem}
+.hero .badges{display:flex;gap:.75rem;justify-content:center;margin-bottom:2rem;flex-wrap:wrap}
+.badge{padding:.35rem .85rem;border-radius:20px;font-size:.75rem;font-weight:600;border:1px solid var(--border);color:var(--muted)}
+.badge.green{border-color:var(--green);color:var(--green)}
+.badge.blue{border-color:var(--accent);color:var(--accent)}
+.badge.purple{border-color:var(--purple);color:var(--purple)}
+.hero-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.hero-actions .secondary{padding:.5rem 1.2rem;border:1px solid var(--border);border-radius:6px;color:var(--text);font-weight:600;font-size:.85rem;transition:border-color .2s}
+.hero-actions .secondary:hover{border-color:var(--accent);text-decoration:none}
+
+/* Terminal */
+.terminal{max-width:720px;margin:3rem auto 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;text-align:left}
+.terminal-bar{background:var(--surface2);padding:.6rem 1rem;display:flex;gap:.5rem;align-items:center}
+.terminal-dot{width:10px;height:10px;border-radius:50%}
+.terminal-dot.r{background:#ef4444}.terminal-dot.y{background:#eab308}.terminal-dot.g{background:#22c55e}
+.terminal-bar span{margin-left:.5rem;font-size:.75rem;color:var(--muted)}
+.terminal pre{padding:1.25rem;font-size:.8rem;line-height:1.8;overflow-x:auto;color:var(--muted)}
+.terminal pre .cmd{color:var(--green)}
+.terminal pre .out{color:var(--text)}
+.terminal pre .dim{color:#475569}
+.terminal pre .hl{color:var(--accent2)}
+.terminal pre .warn{color:var(--orange)}
+.terminal pre .ok{color:var(--green)}
+
+/* Sections */
+section{padding:5rem 2rem}
+.container{max-width:1100px;margin:0 auto}
+.section-label{font-size:.75rem;text-transform:uppercase;letter-spacing:2px;color:var(--accent);font-weight:700;margin-bottom:.5rem}
+.section-title{font-size:2rem;font-weight:800;letter-spacing:-.5px;margin-bottom:.5rem}
+.section-desc{color:var(--muted);max-width:600px;margin-bottom:2.5rem}
+
+/* Grid cards */
+.grid{display:grid;gap:1.25rem}
+.grid-3{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.grid-2{grid-template-columns:repeat(auto-fit,minmax(400px,1fr))}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;transition:border-color .2s}
+.card:hover{border-color:var(--accent)}
+.card-icon{font-size:1.5rem;margin-bottom:.75rem}
+.card h3{font-size:1rem;font-weight:700;margin-bottom:.35rem}
+.card p{font-size:.85rem;color:var(--muted);line-height:1.6}
+
+/* Architecture */
+.arch-diagram{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem;font-family:monospace;font-size:.8rem;overflow-x:auto;white-space:pre;color:var(--muted);line-height:1.8}
+.arch-diagram .hl{color:var(--accent2)}
+.arch-diagram .g{color:var(--green)}
+
+/* Agent pipeline */
+.pipeline{display:flex;gap:1rem;overflow-x:auto;padding:1rem 0}
+.pipe-stage{flex:0 0 auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;min-width:180px;text-align:center}
+.pipe-stage .num{display:inline-block;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:.8rem;line-height:28px;margin-bottom:.5rem}
+.pipe-stage h4{font-size:.85rem;font-weight:700;margin-bottom:.25rem}
+.pipe-stage p{font-size:.75rem;color:var(--muted)}
+.pipe-arrow{display:flex;align-items:center;color:var(--border);font-size:1.5rem;flex:0 0 auto}
+
+/* Agent grid */
+.agent-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:1.5rem}
+.agent-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1rem;font-size:.8rem}
+.agent-card .name{font-weight:700;color:var(--accent2);margin-bottom:.25rem}
+.agent-card .desc{color:var(--muted);font-size:.75rem}
+
+/* Install */
+.install-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem 2rem;font-family:monospace;font-size:.9rem}
+.install-block .comment{color:#475569}
+.install-block .cmd{color:var(--green)}
+
+/* Footer */
+footer{border-top:1px solid var(--border);padding:2.5rem 2rem;text-align:center;font-size:.8rem;color:var(--muted)}
+footer strong{color:var(--text)}
+
+/* Responsive */
+@media(max-width:768px){
+  .hero h1{font-size:2rem}
+  .hero .subtitle{font-size:1rem}
+  nav ul{display:none}
+  .grid-3,.grid-2{grid-template-columns:1fr}
+  .pipeline{flex-direction:column;align-items:center}
+  .pipe-arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <div class="logo"><span>Be</span>Guardit</div>
+    <ul>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#agents">Multi-Agent</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI" class="cta-btn">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="badges">
+    <span class="badge green">Open Source</span>
+    <span class="badge blue">Multi-Agent</span>
+    <span class="badge purple">AI Security</span>
+  </div>
+  <h1>Security Assessment<br>From Your Terminal</h1>
+  <p class="subtitle">Zero-footprint cybersecurity and AI security assessment platform. Collect host-level evidence, evaluate policies, correlate attack paths, and generate actionable reports.</p>
+  <div class="hero-actions">
+    <a href="#install" class="cta-btn">Get Started</a>
+    <a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI" class="secondary">View on GitHub</a>
+  </div>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="terminal-dot r"></div>
+      <div class="terminal-dot y"></div>
+      <div class="terminal-dot g"></div>
+      <span>Terminal</span>
+    </div>
+    <pre>
+<span class="cmd">$ beguardit start --profile deep --mode online</span>
+
+<span class="dim">&#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+&#9474;        BeGuardit Assessment Start        &#9474;
+&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;</span>
+
+<span class="out">&#9656; Collecting evidence...</span>
+<span class="ok">  &#10003; 247 evidence items from 18 assets</span>
+
+<span class="out">&#9656; Evaluating policies...</span>
+<span class="ok">  &#10003; 34 findings</span> <span class="warn">(2 critical, 5 high, 12 medium)</span>
+
+<span class="out">&#9656; Building correlation graph...</span>
+<span class="ok">  &#10003; 3 attack paths identified</span>
+
+<span class="out">&#9656; Uploading to API...</span>
+<span class="ok">  &#10003; Uploaded successfully</span>
+
+<span class="hl">Assessment complete.</span></pre>
+  </div>
+</div>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <div class="section-label">Features</div>
+    <div class="section-title">Everything you need for security assessment</div>
+    <p class="section-desc">From evidence collection to executive reports, BeGuardit covers the full assessment lifecycle.</p>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="card-icon">&#128270;</div>
+        <h3>10+ Collector Agents</h3>
+        <p>OS info, network, services, packages, users, filesystem, AI runtimes, models, prompts, and RAG pipelines. Each runs independently with its own error boundary.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#9888;&#65039;</div>
+        <h3>Policy Evaluation Engine</h3>
+        <p>Rule-based analysis with five severity levels. Customizable policy rules with remediation guidance built into every finding.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#128279;</div>
+        <h3>Attack Path Correlation</h3>
+        <p>Graph-based analysis identifies multi-step attack chains that no single collector could detect alone.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#128196;</div>
+        <h3>Multi-Format Reports</h3>
+        <p>HTML, PDF, SARIF v2.1.0, and canonical JSON with SHA-256 integrity hashing. GitHub Code Scanning compatible.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#129302;</div>
+        <h3>AI Security Posture</h3>
+        <p>Detect inference servers, audit deployed models, analyze prompt injection vectors, and evaluate RAG pipeline boundaries.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#127970;</div>
+        <h3>Enterprise Multi-Tenancy</h3>
+        <p>Shared-schema PostgreSQL with row-level security, RBAC (admin/operator/viewer), Argon2id auth, and CSRF protection.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture" style="background:var(--surface)">
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <div class="section-title">Built for scale, designed for simplicity</div>
+    <p class="section-desc">Six components, one monorepo. Modular layered architecture with clear boundaries and documented evolution paths.</p>
+
+    <div class="arch-diagram"><span class="hl">┌──────────────────────────────────────────────────────────────────┐</span>
+<span class="hl">│</span>                        <span class="g">BeGuardit Platform</span>                        <span class="hl">│</span>
+<span class="hl">├──────────┬──────────┬──────────┬──────────┬──────────┬──────────┤</span>
+<span class="hl">│</span>   <span class="g">CLI</span>    <span class="hl">│</span>   <span class="g">API</span>    <span class="hl">│</span>  <span class="g">Worker</span>  <span class="hl">│</span>  <span class="g">Portal</span>  <span class="hl">│</span>  <span class="g">Site</span>    <span class="hl">│</span>  <span class="g">Infra</span>   <span class="hl">│</span>
+<span class="hl">│</span> Node.js  <span class="hl">│</span> FastAPI  <span class="hl">│</span> ARQ+Redis<span class="hl">│</span> React 18 <span class="hl">│</span> Astro 4  <span class="hl">│</span> K8s      <span class="hl">│</span>
+<span class="hl">│</span> 20 LTS   <span class="hl">│</span> Py 3.12+ <span class="hl">│</span> Py 3.12+ <span class="hl">│</span> Vite+TS  <span class="hl">│</span> Static   <span class="hl">│</span> Docker   <span class="hl">│</span>
+<span class="hl">└──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘</span>
+     │           │           │           │
+     │     <span class="hl">┌─────┴─────┐</span>     │           │
+     └────►<span class="hl">│</span><span class="g">PostgreSQL</span> <span class="hl">│</span>◄────┘           │
+           <span class="hl">│</span>   16      <span class="hl">│</span>                 │
+           <span class="hl">└─────┬─────┘</span>                 │
+                 │                       │
+           <span class="hl">┌─────┴─────┐</span>                │
+           <span class="hl">│</span>  <span class="g">Redis 7</span>  <span class="hl">│</span>◄───────────────┘
+           <span class="hl">└───────────┘</span></div>
+  </div>
+</section>
+
+<!-- Multi-Agent Pipeline -->
+<section id="agents">
+  <div class="container">
+    <div class="section-label">Multi-Agent Pipeline</div>
+    <div class="section-title">Parallel agent execution with fault isolation</div>
+    <p class="section-desc">Independent collector agents run concurrently, each specialized for a specific evidence domain. Partial failures never block the pipeline.</p>
+
+    <div class="pipeline">
+      <div class="pipe-stage">
+        <div class="num">1</div>
+        <h4>Dispatch</h4>
+        <p>Session created, agents selected by profile</p>
+      </div>
+      <div class="pipe-arrow">&#8594;</div>
+      <div class="pipe-stage">
+        <div class="num">2</div>
+        <h4>Collect</h4>
+        <p>10+ agents run in parallel with error boundaries</p>
+      </div>
+      <div class="pipe-arrow">&#8594;</div>
+      <div class="pipe-stage">
+        <div class="num">3</div>
+        <h4>Evaluate</h4>
+        <p>Policy engine scores findings by severity</p>
+      </div>
+      <div class="pipe-arrow">&#8594;</div>
+      <div class="pipe-stage">
+        <div class="num">4</div>
+        <h4>Correlate</h4>
+        <p>Graph analysis identifies attack paths</p>
+      </div>
+      <div class="pipe-arrow">&#8594;</div>
+      <div class="pipe-stage">
+        <div class="num">5</div>
+        <h4>Report</h4>
+        <p>HTML, PDF, SARIF, JSON with integrity hash</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:2.5rem;font-size:1rem;font-weight:700;margin-bottom:.5rem">Collector Agents</h3>
+    <div class="agent-grid">
+      <div class="agent-card"><div class="name">os-info</div><div class="desc">Kernel, distro, architecture, uptime, hostnames</div></div>
+      <div class="agent-card"><div class="name">network</div><div class="desc">Interfaces, open ports, routing, firewall rules</div></div>
+      <div class="agent-card"><div class="name">services</div><div class="desc">Running services, systemd units, listening sockets</div></div>
+      <div class="agent-card"><div class="name">packages</div><div class="desc">Installed packages, CVE cross-reference, outdated deps</div></div>
+      <div class="agent-card"><div class="name">users-auth</div><div class="desc">User accounts, SSH keys, sudo config, PAM modules</div></div>
+      <div class="agent-card"><div class="name">filesystem</div><div class="desc">Permissions, SUID binaries, world-writable dirs, secrets</div></div>
+      <div class="agent-card"><div class="name">ai-runtimes</div><div class="desc">Inference servers, GPU allocation, model registries</div></div>
+      <div class="agent-card"><div class="name">ai-models</div><div class="desc">Deployed models, versioning, access controls</div></div>
+      <div class="agent-card"><div class="name">ai-prompts</div><div class="desc">Exposed endpoints, injection vectors, guardrails</div></div>
+      <div class="agent-card"><div class="name">ai-rag</div><div class="desc">RAG pipelines, retrieval boundaries, data sources</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Install -->
+<section id="install" style="background:var(--surface)">
+  <div class="container" style="max-width:700px">
+    <div class="section-label">Get Started</div>
+    <div class="section-title">Install in seconds</div>
+    <p class="section-desc">One command to install, one command to scan.</p>
+
+    <div class="install-block" style="margin-bottom:1.25rem">
+      <div class="comment"># Install the CLI globally</div>
+      <div class="cmd">$ npm install -g @beguardit/cli</div>
+    </div>
+
+    <div class="install-block" style="margin-bottom:1.25rem">
+      <div class="comment"># Run your first assessment</div>
+      <div class="cmd">$ beguardit start</div>
+    </div>
+
+    <div class="install-block" style="margin-bottom:1.25rem">
+      <div class="comment"># Or run the full platform with Docker</div>
+      <div class="cmd">$ git clone https://github.com/benchbrex-USA/BEGUARDIT-CLI.git</div>
+      <div class="cmd">$ cd BEGUARDIT-CLI && docker compose -f infra/docker-compose.yml up</div>
+    </div>
+
+    <div class="install-block">
+      <div class="comment"># Check system prerequisites</div>
+      <div class="cmd">$ beguardit doctor</div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <p>Built by <strong><a href="https://github.com/benchbrex-USA">Benchbrex</a></strong> &mdash; Securing infrastructure, one assessment at a time.</p>
+  <p style="margin-top:.5rem"><a href="https://github.com/benchbrex-USA/BEGUARDIT-CLI">GitHub</a> &bull; <a href="mailto:security@beguardit.com">Report a Vulnerability</a></p>
+</footer>
+
+</body>
+</html>

@@ -9,15 +9,13 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 import structlog
 from sqlalchemy import text
 
-from src.config import get_config
 from src.db import async_session_factory
+from src.storage import get_storage
 
 logger = structlog.get_logger()
 
@@ -37,7 +35,6 @@ async def generate_sarif_export(ctx: dict, *, job_id: str, session_id: str, tena
     Idempotency (§9.3): if the job is already completed and the file exists,
     skip regeneration.
     """
-    config = get_config()
     log = logger.bind(job_id=job_id, session_id=session_id)
 
     async with async_session_factory() as db:
@@ -47,8 +44,11 @@ async def generate_sarif_export(ctx: dict, *, job_id: str, session_id: str, tena
             {"id": job_id, "tid": tenant_id},
         )).first()
 
+        storage = get_storage()
+        storage_key = f"{tenant_id}/{job_id}.sarif.json"
+
         if job_row and job_row.status == "completed" and job_row.output_path:
-            if os.path.exists(job_row.output_path):
+            if await storage.exists(storage_key):
                 log.info("idempotent_skip", output_path=job_row.output_path)
                 return {"status": "already_completed", "output_path": job_row.output_path}
 
@@ -127,13 +127,13 @@ async def generate_sarif_export(ctx: dict, *, job_id: str, session_id: str, tena
                 ],
             }
 
-            # ── Write to disk ─────────────────────────────────────────
-            report_dir = Path(config.REPORT_STORAGE_PATH) / str(tenant_id)
-            report_dir.mkdir(parents=True, exist_ok=True)
-            output_path = str(report_dir / f"{job_id}.sarif.json")
-
-            with open(output_path, "w", encoding="utf-8") as fp:
-                json.dump(sarif, fp, indent=2)
+            # ── Upload to storage ─────────────────────────────────────
+            await storage.upload(
+                storage_key,
+                json.dumps(sarif, indent=2).encode("utf-8"),
+                content_type="application/json",
+            )
+            output_path = storage_key
 
             # ── Mark completed ────────────────────────────────────────
             await db.execute(

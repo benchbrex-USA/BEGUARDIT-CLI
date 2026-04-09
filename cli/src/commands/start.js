@@ -90,30 +90,79 @@ export function startCommand(program) {
       logger.info({ sessionId, mode: opts.mode, profile: opts.profile, categories }, 'assessment_started');
 
       let exitCode = EXIT_SUCCESS;
+      let evidence = [];
+      let assets = [];
+      let findings = [];
+      let attackPaths = [];
+      let summary = {};
+      let reportData = null;
 
+      // Remediation hints per step
+      const HINTS = {
+        collect: [
+          'Check that collectors have required permissions (e.g., sudo for network scans)',
+          'Try a different scan profile (--profile quick) to skip failing collectors',
+          'Run "beguardit doctor" to verify system prerequisites',
+        ],
+        evaluate: [
+          'This may indicate corrupted evidence data — try re-collecting',
+          'Try re-running the assessment with --profile standard',
+        ],
+        correlate: [
+          'Correlation requires at least one finding and one asset',
+          'Try running with more collector categories (--categories cyber,ai)',
+        ],
+        report: [
+          'Check disk space and write permissions on the output directory',
+          'Try specifying a different output directory with --output <dir>',
+        ],
+        upload: [
+          'Verify API connectivity: check your network and API URL in config',
+          'Run "beguardit config show" to verify your API endpoint',
+          'The assessment was saved locally — you can upload later with "beguardit upload <file>"',
+        ],
+      };
+
+      function handleStepError(step, err) {
+        exitCode = EXIT_PARTIAL;
+        logger.error({ sessionId, step, error: err.message }, `${step}_failed`);
+        console.log(`  ✗ ${step} failed: ${err.message}`);
+        for (const hint of HINTS[step] || []) {
+          console.log(`    Hint: ${hint}`);
+        }
+        console.log('');
+      }
+
+      // Step 1: Collect evidence
       try {
-        // Step 1: Collect evidence
         console.log('▸ Collecting evidence...');
         const { runCollectors } = await import('../collectors/index.js');
-        const { evidence, assets, collectorErrors } = await runCollectors({
+        const result = await runCollectors({
           sessionId,
           profile: opts.profile,
           categories,
         });
-        if (collectorErrors.length > 0) {
+        evidence = result.evidence;
+        assets = result.assets;
+        if (result.collectorErrors.length > 0) {
           exitCode = EXIT_PARTIAL;
-          for (const err of collectorErrors) {
+          for (const err of result.collectorErrors) {
             logger.warn({ collector: err.collector, error: err.message }, 'collector_failed');
             console.log(`  ⚠ ${err.collector}: ${err.message}`);
           }
         }
         console.log(`  ✓ ${evidence.length} evidence items from ${assets.length} assets\n`);
+      } catch (err) {
+        handleStepError('collect', err);
+        process.exit(EXIT_FATAL);
+      }
 
-        // Step 2: Evaluate policies
+      // Step 2: Evaluate policies
+      try {
         console.log('▸ Evaluating policies...');
         const { evaluate } = await import('../policy/engine.js');
-        const findings = await evaluate(evidence);
-        const summary = {
+        findings = await evaluate(evidence);
+        summary = {
           total: findings.length,
           critical: findings.filter((f) => f.severity === 'critical').length,
           high: findings.filter((f) => f.severity === 'high').length,
@@ -122,21 +171,29 @@ export function startCommand(program) {
           info: findings.filter((f) => f.severity === 'info').length,
         };
         console.log(`  ✓ ${summary.total} findings (${summary.critical} critical, ${summary.high} high, ${summary.medium} medium)\n`);
+      } catch (err) {
+        handleStepError('evaluate', err);
+      }
 
-        // Step 3: Correlate attack paths
+      // Step 3: Correlate attack paths
+      try {
         console.log('▸ Building correlation graph...');
         const { buildGraph } = await import('../correlation/graph.js');
         const { findAttackPaths } = await import('../correlation/paths.js');
         const graph = buildGraph(assets, findings);
-        const attackPaths = findAttackPaths(graph);
+        attackPaths = findAttackPaths(graph);
         console.log(`  ✓ ${attackPaths.length} attack paths identified\n`);
+      } catch (err) {
+        handleStepError('correlate', err);
+      }
 
-        // Step 4: Generate reports
+      // Step 4: Generate reports
+      try {
         console.log('▸ Generating reports...');
         const { generateCanonicalJSON } = await import('../report/json-canonical.js');
         const { renderHTML } = await import('../report/html-renderer.js');
 
-        const reportData = {
+        reportData = {
           version: '1.0',
           session_id: sessionId,
           hostname: (await import('node:os')).hostname(),
@@ -159,20 +216,33 @@ export function startCommand(program) {
         console.log(`  ✓ HTML report: ${htmlPath}\n`);
 
         // Step 5: Upload (online mode)
-        if (opts.mode === 'online') {
-          console.log('▸ Uploading to API...');
-          const { uploadAssessment } = await import('../upload/client.js');
-          await uploadAssessment(jsonPath, config.apiUrl);
-          console.log('  ✓ Uploaded successfully\n');
+        if (opts.mode === 'online' && reportData) {
+          try {
+            const { validateReport } = await import('../validation/report-schema.js');
+            const validation = validateReport(reportData);
+            if (!validation.valid) {
+              console.log('  ⚠ Report validation failed:');
+              for (const verr of validation.errors) {
+                console.log(`    • ${verr}`);
+              }
+              logger.warn({ errors: validation.errors }, 'report_validation_failed');
+              exitCode = EXIT_PARTIAL;
+            } else {
+              console.log('▸ Uploading to API...');
+              const { uploadAssessment } = await import('../upload/client.js');
+              await uploadAssessment(jsonPath, config.apiUrl);
+              console.log('  ✓ Uploaded successfully\n');
+            }
+          } catch (err) {
+            handleStepError('upload', err);
+          }
         }
-
-        logger.info({ sessionId, summary, exitCode }, 'assessment_completed');
-        console.log('Assessment complete.\n');
       } catch (err) {
-        logger.error({ sessionId, error: err.message }, 'assessment_fatal_error');
-        console.error(`\n✗ Fatal error: ${err.message}\n`);
-        exitCode = EXIT_FATAL;
+        handleStepError('report', err);
       }
+
+      logger.info({ sessionId, summary, exitCode }, 'assessment_completed');
+      console.log('Assessment complete.\n');
 
       process.exit(exitCode);
     });

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchAssessments, queryKeys } from '../api/queries';
 import { Link } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge';
-import { StatCard, DataTable, EmptyState, PageSpinner } from '../components/ui';
+import { StatCard, DataTable, EmptyState, TableSkeleton, ErrorCard, Skeleton } from '../components/ui';
 import type { Column } from '../components/ui';
 import type { AssessmentSummary } from '../types/api';
 
@@ -23,12 +23,33 @@ const COLUMNS: Column<AssessmentSummary>[] = [
 ];
 
 export default function DashboardPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.assessments(),
     queryFn: () => fetchAssessments(0, 5),
   });
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <h1 className="text-xl font-bold mb-4">Dashboard</h1>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-lg" />
+          ))}
+        </div>
+        <TableSkeleton rows={5} columns={4} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <h1 className="text-xl font-bold mb-4">Dashboard</h1>
+        <ErrorCard message={error instanceof Error ? error.message : 'Failed to load dashboard'} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const items = data?.items ?? [];
 

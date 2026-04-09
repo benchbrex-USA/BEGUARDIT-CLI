@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchReports, queryKeys } from '../api/queries';
 import StatusBadge from '../components/StatusBadge';
-import { DataTable, Pagination, EmptyState, PageSpinner } from '../components/ui';
+import { DataTable, Pagination, EmptyState, TableSkeleton, ErrorCard } from '../components/ui';
 import type { Column } from '../components/ui';
 import type { ReportJob } from '../types/api';
 
@@ -37,7 +37,7 @@ export default function ReportsPage() {
   const [page, setPage] = useState(0);
   const limit = 20;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.reports({ offset: String(page * limit) }),
     queryFn: () => fetchReports(page * limit, limit),
     refetchInterval: 10_000, // Poll for report completion
@@ -45,7 +45,23 @@ export default function ReportsPage() {
 
   const totalPages = Math.ceil((data?.total ?? 0) / limit);
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <h1 className="text-xl font-bold mb-4">Reports</h1>
+        <TableSkeleton rows={8} columns={6} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <h1 className="text-xl font-bold mb-4">Reports</h1>
+        <ErrorCard message={error instanceof Error ? error.message : 'Failed to load reports'} onRetry={refetch} />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-5xl">

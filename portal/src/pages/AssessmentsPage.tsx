@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { fetchAssessments, queryKeys } from '../api/queries';
 import StatusBadge from '../components/StatusBadge';
-import { DataTable, Pagination, EmptyState, PageSpinner } from '../components/ui';
+import { DataTable, Pagination, EmptyState, TableSkeleton, ErrorCard } from '../components/ui';
 import type { Column } from '../components/ui';
 import type { AssessmentSummary } from '../types/api';
 
@@ -40,14 +40,30 @@ export default function AssessmentsPage() {
   const [page, setPage] = useState(0);
   const limit = 20;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.assessments({ offset: String(page * limit) }),
     queryFn: () => fetchAssessments(page * limit, limit),
   });
 
   const totalPages = Math.ceil((data?.total ?? 0) / limit);
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <h1 className="text-xl font-bold mb-4">Assessments</h1>
+        <TableSkeleton rows={8} columns={5} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <h1 className="text-xl font-bold mb-4">Assessments</h1>
+        <ErrorCard message={error instanceof Error ? error.message : 'Failed to load assessments'} onRetry={refetch} />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-5xl">
