@@ -110,6 +110,7 @@ def create_app() -> FastAPI:
         docs_url="/api/v1/docs",
         redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
+        redirect_slashes=False,
     )
 
     # ------------------------------------------------------------------
