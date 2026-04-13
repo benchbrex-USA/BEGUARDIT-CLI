@@ -4,7 +4,7 @@
   "installCommand": "cd portal && npm ci",
   "framework": "vite",
   "rewrites": [
-    { "source": "/api/v1/:path*", "destination": "https://afmedxbeklcvmawdpqtr.supabase.co/functions/v1/beguardit-auth/:path*" },
+    { "source": "/api/v1/:path*", "destination": "https://afmedxbeklcvmawdpqtr.supabase.co/functions/v1/beguardit-api-v2/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
