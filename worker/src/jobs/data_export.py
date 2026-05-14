@@ -6,6 +6,7 @@
 # Idempotent: checks for existing completed output before processing
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import tempfile
@@ -34,6 +35,25 @@ _TENANT_TABLES: list[tuple[str, str]] = [
     ("sessions", "tenant_id"),
     ("data_export_jobs", "tenant_id"),
 ]
+
+
+def _write_json_file(file_path: str, data: list | dict) -> None:
+    """Serialize and write data to a JSON file (synchronous helper)."""
+    if isinstance(data, list):
+        serialized = [_serialize_row(r) for r in data]
+    else:
+        serialized = _serialize_row(data)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(serialized, f, indent=2, default=str)
+
+
+def _create_zip_archive(zip_path: str, source_dir: str) -> None:
+    """Create a ZIP archive from files in a directory (synchronous helper)."""
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_name in os.listdir(source_dir):
+            file_path = os.path.join(source_dir, file_name)
+            zf.write(file_path, arcname=file_name)
 
 
 def _serialize_row(row) -> dict:
@@ -92,10 +112,17 @@ async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
             )).first()
 
             with tempfile.TemporaryDirectory() as tmpdir:
+                export_tasks = []
+
                 # Tenant record
                 if tenant_row:
-                    with open(os.path.join(tmpdir, "tenant.json"), "w", encoding="utf-8") as f:
-                        json.dump(_serialize_row(tenant_row), f, indent=2, default=str)
+                    export_tasks.append(
+                        asyncio.to_thread(
+                            _write_json_file,
+                            os.path.join(tmpdir, "tenant.json"),
+                            tenant_row,
+                        )
+                    )
 
                 # Users connected to this tenant
                 user_rows = (await db.execute(
@@ -106,8 +133,13 @@ async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
                     ),
                     {"tid": tenant_id},
                 )).fetchall()
-                with open(os.path.join(tmpdir, "users.json"), "w", encoding="utf-8") as f:
-                    json.dump([_serialize_row(r) for r in user_rows], f, indent=2, default=str)
+                export_tasks.append(
+                    asyncio.to_thread(
+                        _write_json_file,
+                        os.path.join(tmpdir, "users.json"),
+                        user_rows,
+                    )
+                )
 
                 # Each tenant-scoped table
                 for table_name, col in _TENANT_TABLES:
@@ -116,14 +148,19 @@ async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
                         {"tid": tenant_id},
                     )).fetchall()
 
-                    with open(os.path.join(tmpdir, f"{table_name}.json"), "w", encoding="utf-8") as f:
-                        json.dump([_serialize_row(r) for r in rows], f, indent=2, default=str)
+                    export_tasks.append(
+                        asyncio.to_thread(
+                            _write_json_file,
+                            os.path.join(tmpdir, f"{table_name}.json"),
+                            rows,
+                        )
+                    )
+
+                # Execute all file writes in parallel threads
+                await asyncio.gather(*export_tasks)
 
                 # ── Create ZIP ─────────────────────────────────────────
-                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                    for file_name in os.listdir(tmpdir):
-                        file_path = os.path.join(tmpdir, file_name)
-                        zf.write(file_path, arcname=file_name)
+                await asyncio.to_thread(_create_zip_archive, zip_path, tmpdir)
 
             # ── Mark completed ────────────────────────────────────────
             await db.execute(
