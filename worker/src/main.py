@@ -18,6 +18,7 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from src.config import get_config
+from src.jobs.data_export import export_tenant_data
 from src.jobs.partition_maintenance import partition_maintenance
 from src.jobs.report_html import generate_html_report
 from src.jobs.report_pdf import generate_pdf_report
@@ -106,6 +107,7 @@ class WorkerSettings:
         generate_html_report,
         generate_pdf_report,
         generate_sarif_export,
+        export_tenant_data,
         partition_maintenance,
     ]
 
