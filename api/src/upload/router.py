@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 
 from fastapi import APIRouter, Depends, File, UploadFile
 from redis.asyncio import Redis
@@ -84,8 +85,9 @@ async def upload_assessment(
     # ── Concurrent scan prevention (Fix 10) ───────────────────────
     hostname = report.hostname or "unknown"
     lock_key = f"beguardit:scan_lock:{session.tenant_id}:{hostname}"
+    lock_token = secrets.token_hex(16)
 
-    acquired = await redis.set(lock_key, "1", nx=True, ex=_SCAN_LOCK_TTL_SECONDS)
+    acquired = await redis.set(lock_key, lock_token, nx=True, ex=_SCAN_LOCK_TTL_SECONDS)
     if not acquired:
         raise ConflictError(
             f"A scan is already running for hostname '{hostname}' in this tenant. "
@@ -101,7 +103,14 @@ async def upload_assessment(
             raw_body=raw_body,
         )
     finally:
-        # Release the lock after import completes (success or failure)
-        await redis.delete(lock_key)
+        # Safe lock release: only delete if the token matches (Fix 10)
+        release_script = """
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("del", KEYS[1])
+        else
+            return 0
+        end
+        """
+        await redis.eval(release_script, 1, lock_key, lock_token)
 
     return UploadResponse(**result)
