@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.admin.models import AuditLog, DataExportJob
@@ -276,13 +276,11 @@ async def soft_delete_tenant(
     tenant.updated_at = datetime.now(timezone.utc)
 
     # Deactivate all memberships
-    memberships = (await db.execute(
-        select(Membership).where(Membership.tenant_id == tenant_id)
-    )).scalars().all()
-
-    for m in memberships:
-        # We set role to 'viewer' to revoke admin/operator access immediately
-        m.role = "viewer"
+    result = await db.execute(
+        update(Membership)
+        .where(Membership.tenant_id == tenant_id)
+        .values(role="viewer")
+    )
 
     await db.commit()
 
@@ -291,5 +289,5 @@ async def soft_delete_tenant(
         tenant_id=str(tenant_id),
         slug=tenant.slug,
         acting_user_id=str(acting_user_id),
-        memberships_deactivated=len(memberships),
+        memberships_deactivated=result.rowcount,
     )
