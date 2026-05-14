@@ -106,9 +106,14 @@ async def login_user(
     # Update last login
     user.last_login_at = datetime.now(timezone.utc)
 
-    # Pick the first membership as default tenant
+    # Pick the first membership in a non-deleted tenant as default
     memberships_result = await db.execute(
-        select(Membership).where(Membership.user_id == user.id)
+        select(Membership)
+        .join(Tenant, Membership.tenant_id == Tenant.id)
+        .where(
+            Membership.user_id == user.id,
+            Tenant.deleted_at.is_(None),
+        )
     )
     membership = memberships_result.scalars().first()
     if not membership:
@@ -133,12 +138,18 @@ async def logout_user(db: AsyncSession, *, token_hash: str) -> None:
 
 
 async def get_session_by_token(db: AsyncSession, *, token: str) -> Session | None:
-    """Look up a valid (non-expired) session by raw token."""
+    """Look up a valid (non-expired) session by raw token.
+
+    Ensures the associated tenant is not soft-deleted.
+    """
     hashed = hash_token(token)
     result = await db.execute(
-        select(Session).where(
+        select(Session)
+        .join(Tenant, Session.tenant_id == Tenant.id)
+        .where(
             Session.token_hash == hashed,
             Session.expires_at > datetime.now(timezone.utc),
+            Tenant.deleted_at.is_(None),
         )
     )
     return result.scalar_one_or_none()
@@ -156,16 +167,19 @@ async def switch_tenant(
     Deletes the current session and creates a new one scoped to the target tenant.
     Returns (membership, new_raw_session_token, csrf_token).
     """
-    # Verify user has membership in target tenant
+    # Verify user has membership in target tenant and it is not deleted
     result = await db.execute(
-        select(Membership).where(
+        select(Membership)
+        .join(Tenant, Membership.tenant_id == Tenant.id)
+        .where(
             Membership.user_id == user_id,
             Membership.tenant_id == target_tenant_id,
+            Tenant.deleted_at.is_(None),
         )
     )
     membership = result.scalar_one_or_none()
     if not membership:
-        raise ForbiddenError("You are not a member of this tenant.")
+        raise ForbiddenError("You are not a member of this tenant or the tenant is deleted.")
 
     # Delete current session
     await db.execute(delete(Session).where(Session.token_hash == current_token_hash))

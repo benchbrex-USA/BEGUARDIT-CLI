@@ -1,5 +1,6 @@
 # Auth domain — SQLAlchemy ORM models
 # Source: ARCH-002-2026-03-17, Section 5 (tenants, users, memberships, sessions)
+# Fix 9.2 (Tenant Soft Delete — GDPR)
 from __future__ import annotations
 
 import uuid
