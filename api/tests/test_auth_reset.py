@@ -251,3 +251,45 @@ class TestPasswordValidation:
         from src.auth.service import _validate_password_strength
         # Should not raise
         _validate_password_strength("ValidPassword1!")
+
+    def test_length_boundary_12(self):
+        from src.auth.service import _validate_password_strength
+        """Exactly 12 characters should pass."""
+        _validate_password_strength("Ab1!56789012")
+
+    def test_length_boundary_11(self):
+        from src.auth.service import _validate_password_strength
+        """11 characters should fail."""
+        with pytest.raises(ValidationError, match="at least 12 characters"):
+            _validate_password_strength("Ab1!5678901")
+
+    def test_all_standard_special_characters(self):
+        from src.auth.service import _validate_password_strength
+        """Test each character in the allowed special character set."""
+        specials = "!@#$%^&*()-_=+[]{}|;:'\",.<>?/\\`~"
+        for char in specials:
+            password = f"Upper1{char}LongEnough"
+            # Should not raise
+            _validate_password_strength(password)
+
+    def test_long_password(self):
+        from src.auth.service import _validate_password_strength
+        """A very long valid password should pass."""
+        _validate_password_strength("A1!" + "a" * 100)
+
+    def test_password_with_space_as_only_potential_special(self):
+        from src.auth.service import _validate_password_strength
+        """Space is not in the allowed special character set, so it should fail if it's the only one."""
+        with pytest.raises(ValidationError, match="special"):
+            _validate_password_strength("Upper 12345678")
+
+    def test_unicode_special_not_accepted(self):
+        from src.auth.service import _validate_password_strength
+        """Unicode symbols like '©' are not in the allowed set, so it should fail if it's the only one."""
+        with pytest.raises(ValidationError, match="special"):
+            _validate_password_strength("Upper12345678©")
+
+    def test_multiple_special_chars(self):
+        from src.auth.service import _validate_password_strength
+        """Multiple special characters are fine."""
+        _validate_password_strength("Strong!!!!1234A")
