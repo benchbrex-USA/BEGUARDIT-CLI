@@ -46,7 +46,7 @@ async def test_upload_assessment_acquires_and_releases_lock():
     with patch("src.upload.router.CanonicalReport.model_validate", return_value=mock_report), \
          patch("src.upload.router.import_assessment", AsyncMock(return_value={
              "session_id": "sid", "findings_imported": 1, "assets_imported": 1, "evidence_imported": 1
-         })) as mock_import, \\
+         })) as mock_import, \
          patch("secrets.token_hex", return_value="mock-token"):
 
         await upload_assessment(
@@ -131,7 +131,7 @@ async def test_upload_assessment_releases_lock_on_error():
     mock_report.hostname = "error-host"
 
     with patch("src.upload.router.CanonicalReport.model_validate", return_value=mock_report), \
-         patch("src.upload.router.import_assessment", AsyncMock(side_effect=Exception("DB Error"))), \\
+         patch("src.upload.router.import_assessment", AsyncMock(side_effect=Exception("DB Error"))), \
          patch("secrets.token_hex", return_value="error-token"):
 
         with pytest.raises(Exception, match="DB Error"):
