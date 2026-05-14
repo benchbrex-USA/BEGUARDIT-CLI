@@ -95,21 +95,25 @@ async def import_assessment(
     db.add(session)
 
     # ── Import assets ────────────────────────────────────────────────
-    for a in report.assets:
-        db.add(Asset(
+    assets = [
+        Asset(
             session_id=session_uuid,
             tenant_id=tenant_id,
             asset_type=a.asset_type,
             name=a.name,
             metadata_=a.metadata,
-        ))
+        )
+        for a in report.assets
+    ]
+    db.add_all(assets)
 
     # ── Import evidence ──────────────────────────────────────────────
     evidence_map: dict[int, uuid.UUID] = {}
+    evidence_items = []
     for idx, e in enumerate(report.evidence):
         eid = uuid.uuid4()
         evidence_map[idx] = eid
-        db.add(Evidence(
+        evidence_items.append(Evidence(
             id=eid,
             session_id=session_uuid,
             tenant_id=tenant_id,
@@ -118,8 +122,10 @@ async def import_assessment(
             data=e.data,
             collected_at=_parse_ts(e.collected_at) or datetime.now(timezone.utc),
         ))
+    db.add_all(evidence_items)
 
     # ── Import findings ──────────────────────────────────────────────
+    findings = []
     for f in report.findings:
         # Map string evidence IDs to UUIDs where possible
         evidence_ids = []
@@ -127,7 +133,7 @@ async def import_assessment(
             if _is_uuid(eid_str):
                 evidence_ids.append(uuid.UUID(eid_str))
 
-        db.add(Finding(
+        findings.append(Finding(
             session_id=session_uuid,
             tenant_id=tenant_id,
             rule_id=f.rule_id,
@@ -139,6 +145,7 @@ async def import_assessment(
             remediation=f.remediation,
             metadata_=f.metadata,
         ))
+    db.add_all(findings)
 
     await db.commit()
 
