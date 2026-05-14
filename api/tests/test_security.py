@@ -1,5 +1,4 @@
 # Tests for src.core.security — password hashing and session tokens
-import pytest
 from src.core.security import (
     generate_session_token,
     hash_password,
