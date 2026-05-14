@@ -5,6 +5,7 @@ alembic==1.13.*
 asyncpg
 pydantic-settings
 email-validator
+python-multipart
 argon2-cffi
 arq==0.26.*
 redis
