@@ -37,6 +37,18 @@ export default class BaseCollector {
     return this.profiles.includes(profile);
   }
 
+  /**
+   * Quote a string for use as a shell argument.
+   * @param {string} val
+   * @returns {string}
+   */
+  quote(val) {
+    if (process.platform === 'win32') {
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }
+    return `'${String(val).replace(/'/g, "'\\''")}'`;
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers available to all collectors
   // ---------------------------------------------------------------------------

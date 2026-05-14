@@ -34,7 +34,7 @@ export default class AiPromptsCollector extends BaseCollector {
     for (const root of searchRoots) {
       if (!existsSync(root)) continue;
       const found = this.exec(
-        `find "${root}" -maxdepth 4 \\( ${extArgs} \\) -type f 2>/dev/null | head -50`,
+        `find ${this.quote(root)} -maxdepth 4 \\( ${extArgs} \\) -type f 2>/dev/null | head -50`,
       );
       if (found) {
         for (const filePath of found.split('\n').filter(Boolean)) {
@@ -62,7 +62,7 @@ export default class AiPromptsCollector extends BaseCollector {
       if (!existsSync(root)) continue;
       for (const dirName of promptDirNames) {
         const found = this.exec(
-          `find "${root}" -maxdepth 3 -type d -name "${dirName}" 2>/dev/null | head -20`,
+          `find ${this.quote(root)} -maxdepth 3 -type d -name "${dirName}" 2>/dev/null | head -20`,
         );
         if (found) {
           for (const dir of found.split('\n').filter(Boolean)) {
@@ -94,7 +94,7 @@ export default class AiPromptsCollector extends BaseCollector {
     for (const root of searchRoots) {
       if (!existsSync(root)) continue;
       const found = this.exec(
-        `grep -rl ${patternGlob} "${root}" --include="*.py" 2>/dev/null | head -30`,
+        `grep -rl ${patternGlob} ${this.quote(root)} --include="*.py" 2>/dev/null | head -30`,
       );
       if (found) {
         for (const filePath of found.split('\n').filter(Boolean)) {
@@ -116,7 +116,7 @@ export default class AiPromptsCollector extends BaseCollector {
       for (const root of searchRoots) {
         if (!existsSync(root)) continue;
         const found = this.exec(
-          `grep -rl ${spGlob} "${root}" --include="*.py" --include="*.js" --include="*.ts" 2>/dev/null | head -30`,
+          `grep -rl ${spGlob} ${this.quote(root)} --include="*.py" --include="*.js" --include="*.ts" 2>/dev/null | head -30`,
         );
         if (found) {
           for (const filePath of found.split('\n').filter(Boolean)) {

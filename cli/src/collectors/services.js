@@ -88,7 +88,7 @@ export default class ServicesCollector extends BaseCollector {
         ];
         const plists = [];
         for (const dir of agentDirs) {
-          const ls = this.exec(`ls "${dir}" 2>/dev/null`);
+          const ls = this.exec(`ls ${this.quote(dir)} 2>/dev/null`);
           if (ls) {
             for (const file of ls.split('\n').filter((f) => f.endsWith('.plist'))) {
               plists.push({ directory: dir, file });

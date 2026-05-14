@@ -56,7 +56,7 @@ export default class FilesystemCollector extends BaseCollector {
           const stat = statSync(dir);
           const mode = (stat.mode & 0o777).toString(8);
           const stickyBit = (stat.mode & 0o1000) !== 0;
-          const fileCount = this.exec(`ls -1 "${dir}" 2>/dev/null | wc -l`);
+          const fileCount = this.exec(`ls -1 ${this.quote(dir)} 2>/dev/null | wc -l`);
           tmpInfo.push({
             path: dir,
             permissions: mode,
@@ -94,7 +94,7 @@ export default class FilesystemCollector extends BaseCollector {
     const cronDirs = ['/etc/cron.d', '/etc/cron.daily', '/etc/cron.hourly', '/etc/cron.weekly', '/etc/cron.monthly'];
     const cronFiles = [];
     for (const dir of cronDirs) {
-      const ls = this.exec(`ls -la "${dir}" 2>/dev/null`);
+      const ls = this.exec(`ls -la ${this.quote(dir)} 2>/dev/null`);
       if (ls) {
         const count = ls.split('\n').filter((l) => !l.startsWith('total') && l.trim()).length - 1;
         cronFiles.push({ directory: dir, file_count: Math.max(count, 0) });
