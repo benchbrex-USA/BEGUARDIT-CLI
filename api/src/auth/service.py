@@ -106,9 +106,14 @@ async def login_user(
     # Update last login
     user.last_login_at = datetime.now(timezone.utc)
 
-    # Pick the first membership as default tenant
+    # Pick the first membership as default tenant (must not be deleted)
     memberships_result = await db.execute(
-        select(Membership).where(Membership.user_id == user.id)
+        select(Membership)
+        .join(Tenant, Membership.tenant_id == Tenant.id)
+        .where(
+            Membership.user_id == user.id,
+            Tenant.deleted_at.is_(None),
+        )
     )
     membership = memberships_result.scalars().first()
     if not membership:
@@ -155,12 +160,17 @@ async def switch_tenant(
 
     Deletes the current session and creates a new one scoped to the target tenant.
     Returns (membership, new_raw_session_token, csrf_token).
+
+    Validates that the target tenant is not soft-deleted.
     """
-    # Verify user has membership in target tenant
+    # Verify user has membership in target tenant (and tenant is not deleted)
     result = await db.execute(
-        select(Membership).where(
+        select(Membership)
+        .join(Tenant, Membership.tenant_id == Tenant.id)
+        .where(
             Membership.user_id == user_id,
             Membership.tenant_id == target_tenant_id,
+            Tenant.deleted_at.is_(None),
         )
     )
     membership = result.scalar_one_or_none()
