@@ -50,12 +50,14 @@ export default class AiRagCollector extends BaseCollector {
     const dockerVecDbs = this.exec('docker ps --format "{{.Names}}\t{{.Image}}" 2>/dev/null');
     if (dockerVecDbs) {
       const keywords = ['chroma', 'qdrant', 'weaviate', 'milvus', 'pinecone', 'pgvector'];
+      const keywordsRegex = new RegExp(keywords.join('|'), 'i');
       for (const line of dockerVecDbs.split('\n').filter(Boolean)) {
         const [name, image] = line.split('\t');
-        const match = keywords.find((kw) => image?.toLowerCase().includes(kw));
+        const match = image?.match(keywordsRegex);
         if (match) {
+          const matchedKw = match[0].toLowerCase();
           detectedDbs.push({
-            name: `${match} (docker: ${name})`,
+            name: `${matchedKw} (docker: ${name})`,
             image,
             running: true,
             source: 'docker',
