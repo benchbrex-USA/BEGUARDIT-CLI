@@ -28,6 +28,7 @@ def _mock_db_session() -> AsyncMock:
     """Create a mock AsyncSession with chainable execute()."""
     db = AsyncMock()
     db.add = MagicMock()
+    db.add_all = MagicMock()
     db.commit = AsyncMock()
     db.flush = AsyncMock()
     db.execute = AsyncMock()
@@ -202,9 +203,13 @@ class TestImportAssessment:
         )
 
         assert result["findings_imported"] == 1
-        # Verify the add call used "info" severity
-        added_objs = [call.args[0] for call in db.add.call_args_list]
-        finding_objs = [o for o in added_objs if hasattr(o, "severity")]
+        # Verify the add_all call used "info" severity for findings
+        # db.add_all is called for assets, evidence, and findings
+        all_added = []
+        for call in db.add_all.call_args_list:
+            all_added.extend(call.args[0])
+
+        finding_objs = [o for o in all_added if hasattr(o, "severity")]
         assert any(f.severity == "info" for f in finding_objs)
 
     @pytest.mark.asyncio
