@@ -6,12 +6,14 @@
 # Idempotent: checks for existing completed output before processing
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import structlog
@@ -47,6 +49,30 @@ def _serialize_row(row) -> dict:
         else:
             result[key] = value
     return result
+
+
+def _write_json_file(file_path: str, data: Any, serialize: bool = False) -> None:
+    """Write data to a JSON file synchronously.
+
+    If serialize is True, the data is assumed to be a list of rows or a single row
+    that needs _serialize_row conversion before dumping.
+    """
+    if serialize:
+        if isinstance(data, list):
+            data = [_serialize_row(r) for r in data]
+        else:
+            data = _serialize_row(data)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+def _create_zip_archive(zip_path: str, source_dir: str) -> None:
+    """Create a ZIP archive from a directory synchronously."""
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_name in os.listdir(source_dir):
+            file_path = os.path.join(source_dir, file_name)
+            zf.write(file_path, arcname=file_name)
 
 
 async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
@@ -94,8 +120,12 @@ async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Tenant record
                 if tenant_row:
-                    with open(os.path.join(tmpdir, "tenant.json"), "w", encoding="utf-8") as f:
-                        json.dump(_serialize_row(tenant_row), f, indent=2, default=str)
+                    await asyncio.to_thread(
+                        _write_json_file,
+                        os.path.join(tmpdir, "tenant.json"),
+                        tenant_row,
+                        serialize=True,
+                    )
 
                 # Users connected to this tenant
                 user_rows = (await db.execute(
@@ -106,8 +136,12 @@ async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
                     ),
                     {"tid": tenant_id},
                 )).fetchall()
-                with open(os.path.join(tmpdir, "users.json"), "w", encoding="utf-8") as f:
-                    json.dump([_serialize_row(r) for r in user_rows], f, indent=2, default=str)
+                await asyncio.to_thread(
+                    _write_json_file,
+                    os.path.join(tmpdir, "users.json"),
+                    user_rows,
+                    serialize=True,
+                )
 
                 # Each tenant-scoped table
                 for table_name, col in _TENANT_TABLES:
@@ -116,14 +150,15 @@ async def export_tenant_data(ctx: dict, *, job_id: str, tenant_id: str) -> dict:
                         {"tid": tenant_id},
                     )).fetchall()
 
-                    with open(os.path.join(tmpdir, f"{table_name}.json"), "w", encoding="utf-8") as f:
-                        json.dump([_serialize_row(r) for r in rows], f, indent=2, default=str)
+                    await asyncio.to_thread(
+                        _write_json_file,
+                        os.path.join(tmpdir, f"{table_name}.json"),
+                        rows,
+                        serialize=True,
+                    )
 
                 # ── Create ZIP ─────────────────────────────────────────
-                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-                    for file_name in os.listdir(tmpdir):
-                        file_path = os.path.join(tmpdir, file_name)
-                        zf.write(file_path, arcname=file_name)
+                await asyncio.to_thread(_create_zip_archive, zip_path, tmpdir)
 
             # ── Mark completed ────────────────────────────────────────
             await db.execute(
