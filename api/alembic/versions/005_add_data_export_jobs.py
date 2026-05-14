@@ -2,16 +2,16 @@
 # Source: ARCH-002-2026-03-17, Fix 9.1 (Tenant Data Export — GDPR)
 from __future__ import annotations
 
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import UUID
+
 """Add data_export_jobs table
 
 Revision ID: e5f6a7b8c9d0
 Revises: a1b2c3d4e5f6
 Create Date: 2026-03-18
 """
-
-import sqlalchemy as sa
-from alembic import op
-from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision: str = "e5f6a7b8c9d0"

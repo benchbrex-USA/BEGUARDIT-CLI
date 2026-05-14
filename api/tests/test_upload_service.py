@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -13,10 +12,6 @@ import pytest
 from src.core.exceptions import ConflictError, ValidationError
 from src.upload.schemas import (
     CanonicalReport,
-    UploadAsset,
-    UploadEvidence,
-    UploadFinding,
-    UploadIntegrity,
 )
 
 

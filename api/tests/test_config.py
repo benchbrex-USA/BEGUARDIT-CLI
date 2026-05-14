@@ -2,7 +2,6 @@
 import os
 from unittest import mock
 
-import pytest
 from src.core.config import Settings
 
 

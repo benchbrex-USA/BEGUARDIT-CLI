@@ -2,16 +2,16 @@
 # Source: ARCH-002-2026-03-17, Fix 2 (Password Reset Flow)
 from __future__ import annotations
 
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects.postgresql import UUID
+
 """Add password_reset_tokens table
 
 Revision ID: a1b2c3d4e5f6
 Revises:
 Create Date: 2026-03-18
 """
-
-import sqlalchemy as sa
-from alembic import op
-from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e5f6"

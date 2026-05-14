@@ -2,15 +2,15 @@
 # Source: ARCH-002-2026-03-17, Fix 9.2 (Tenant Soft Delete — GDPR)
 from __future__ import annotations
 
+import sqlalchemy as sa
+from alembic import op
+
 """Add deleted_at column to tenants
 
 Revision ID: f6a7b8c9d0e1
 Revises: e5f6a7b8c9d0
 Create Date: 2026-03-18
 """
-
-import sqlalchemy as sa
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "f6a7b8c9d0e1"

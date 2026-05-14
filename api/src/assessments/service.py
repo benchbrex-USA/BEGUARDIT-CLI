@@ -32,7 +32,12 @@ async def list_assessments(
 
     Returns (items, total_count).
     """
-    base = select(AssessmentSession).where(AssessmentSession.tenant_id == tenant_id)
+    from src.auth.models import Tenant
+    base = (
+        select(AssessmentSession)
+        .join(Tenant, AssessmentSession.tenant_id == Tenant.id)
+        .where(AssessmentSession.tenant_id == tenant_id, Tenant.deleted_at.is_(None))
+    )
     if status:
         base = base.where(AssessmentSession.status == status)
 
@@ -55,10 +60,14 @@ async def get_assessment(
     assessment_id: uuid.UUID,
 ) -> AssessmentSession:
     """Fetch a single assessment session scoped to tenant."""
+    from src.auth.models import Tenant
     result = await db.execute(
-        select(AssessmentSession).where(
+        select(AssessmentSession)
+        .join(Tenant, AssessmentSession.tenant_id == Tenant.id)
+        .where(
             AssessmentSession.id == assessment_id,
             AssessmentSession.tenant_id == tenant_id,
+            Tenant.deleted_at.is_(None),
         )
     )
     session = result.scalar_one_or_none()

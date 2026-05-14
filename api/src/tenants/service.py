@@ -24,7 +24,9 @@ logger = structlog.get_logger()
 
 async def get_tenant(db: AsyncSession, *, tenant_id: uuid.UUID) -> Tenant:
     """Fetch a tenant by ID or raise NotFoundError."""
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    result = await db.execute(
+        select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None))
+    )
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise NotFoundError("Tenant not found.")

@@ -1,5 +1,4 @@
 # Tests for src.core.exceptions — exception hierarchy
-import pytest
 from src.core.exceptions import (
     BeGuarditError,
     ConflictError,

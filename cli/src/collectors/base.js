@@ -74,4 +74,18 @@ export default class BaseCollector {
       metadata,
     };
   }
+
+  /**
+   * Quote a value for use in a shell command.
+   * @param {string} val
+   * @returns {string}
+   */
+  quote(val) {
+    if (process.platform === 'win32') {
+      // Windows: wrap in double quotes and double existing double quotes
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }
+    // Unix: wrap in single quotes and escape existing single quotes
+    return `'${String(val).replace(/'/g, "'\\''")}'`;
+  }
 }

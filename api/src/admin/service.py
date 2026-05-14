@@ -33,7 +33,8 @@ async def list_users(
     base = (
         select(User, Membership.role)
         .join(Membership, Membership.user_id == User.id)
-        .where(Membership.tenant_id == tenant_id)
+        .join(Tenant, Membership.tenant_id == Tenant.id)
+        .where(Membership.tenant_id == tenant_id, Tenant.deleted_at.is_(None))
     )
 
     if is_active is not None:
@@ -163,7 +164,11 @@ async def list_audit_logs(
     user_id: uuid.UUID | None = None,
 ) -> tuple[list[AuditLog], int]:
     """List audit log entries for a tenant, newest first."""
-    base = select(AuditLog).where(AuditLog.tenant_id == tenant_id)
+    base = (
+        select(AuditLog)
+        .join(Tenant, AuditLog.tenant_id == Tenant.id)
+        .where(AuditLog.tenant_id == tenant_id, Tenant.deleted_at.is_(None))
+    )
 
     if action:
         base = base.where(AuditLog.action == action)

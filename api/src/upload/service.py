@@ -64,13 +64,17 @@ async def import_assessment(
     """
     _verify_integrity(report, raw_body)
 
-    # Check for duplicate session_id within tenant
+    # Check for duplicate session_id within tenant (and tenant is not deleted)
     from sqlalchemy import select
+    from src.auth.models import Tenant
 
     existing = (await db.execute(
-        select(AssessmentSession.id).where(
+        select(AssessmentSession.id)
+        .join(Tenant, AssessmentSession.tenant_id == Tenant.id)
+        .where(
             AssessmentSession.tenant_id == tenant_id,
             AssessmentSession.id == uuid.UUID(report.session_id) if _is_uuid(report.session_id) else False,
+            Tenant.deleted_at.is_(None),
         )
     )).first()
 
@@ -95,22 +99,23 @@ async def import_assessment(
     db.add(session)
 
     # ── Import assets ────────────────────────────────────────────────
-    for a in report.assets:
-        db.add(Asset(
+    assets = [
+        Asset(
             session_id=session_uuid,
             tenant_id=tenant_id,
             asset_type=a.asset_type,
             name=a.name,
             metadata_=a.metadata,
-        ))
+        )
+        for a in report.assets
+    ]
+    db.add_all(assets)
 
     # ── Import evidence ──────────────────────────────────────────────
-    evidence_map: dict[int, uuid.UUID] = {}
-    for idx, e in enumerate(report.evidence):
-        eid = uuid.uuid4()
-        evidence_map[idx] = eid
-        db.add(Evidence(
-            id=eid,
+    evidence_list = []
+    for e in report.evidence:
+        evidence_list.append(Evidence(
+            id=uuid.uuid4(),
             session_id=session_uuid,
             tenant_id=tenant_id,
             collector_name=e.collector,
@@ -118,8 +123,10 @@ async def import_assessment(
             data=e.data,
             collected_at=_parse_ts(e.collected_at) or datetime.now(timezone.utc),
         ))
+    db.add_all(evidence_list)
 
     # ── Import findings ──────────────────────────────────────────────
+    findings = []
     for f in report.findings:
         # Map string evidence IDs to UUIDs where possible
         evidence_ids = []
@@ -127,7 +134,7 @@ async def import_assessment(
             if _is_uuid(eid_str):
                 evidence_ids.append(uuid.UUID(eid_str))
 
-        db.add(Finding(
+        findings.append(Finding(
             session_id=session_uuid,
             tenant_id=tenant_id,
             rule_id=f.rule_id,
@@ -139,6 +146,7 @@ async def import_assessment(
             remediation=f.remediation,
             metadata_=f.metadata,
         ))
+    db.add_all(findings)
 
     await db.commit()
 
