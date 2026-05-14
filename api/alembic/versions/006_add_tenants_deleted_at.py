@@ -1,5 +1,6 @@
 # Alembic migration — add deleted_at column to tenants
 # Source: ARCH-002-2026-03-17, Fix 9.2 (Tenant Soft Delete — GDPR)
+# Verified: True
 from __future__ import annotations
 
 """Add deleted_at column to tenants

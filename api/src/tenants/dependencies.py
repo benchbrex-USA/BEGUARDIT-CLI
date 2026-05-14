@@ -30,7 +30,12 @@ async def get_current_tenant(
     if not tenant_id:
         raise NotFoundError("No tenant context.")
 
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    result = await db.execute(
+        select(Tenant).where(
+            Tenant.id == tenant_id,
+            Tenant.deleted_at.is_(None),
+        )
+    )
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise NotFoundError("Tenant not found.")
