@@ -8,7 +8,6 @@
 //   - Scheduler availability (cron/launchd/Task Scheduler)
 import { existsSync, accessSync, constants } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import logger from '../logger.js';
 import { loadConfig, CONFIG_DIR } from '../config.js';
