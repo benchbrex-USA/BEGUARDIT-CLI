@@ -12,7 +12,22 @@ from src.main import create_app
 
 
 @pytest.fixture
-def app():
+def mock_engine():
+    with patch("src.main.engine") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_redis():
+    with patch("src.main.redis_pool") as mock:
+        # Default behavior: Redis is healthy
+        mock.ping = AsyncMock(return_value=True)
+        yield mock
+
+
+@pytest.fixture
+def app(mock_engine, mock_redis):
+    # Depending on mocks ensures they are active when app is created/used
     return create_app()
 
 
@@ -31,15 +46,13 @@ async def test_health_endpoint(client):
 
 
 @pytest.mark.asyncio
-@patch("src.main.engine")
-@patch("src.main.redis_pool")
 async def test_readiness_endpoint_success(mock_redis, mock_engine, client):
     """Verify readiness probe returns 200 OK when all systems are healthy."""
     # Mock Database
     mock_conn = AsyncMock()
     mock_engine.connect.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
 
-    # Mock Redis
+    # Mock Redis (already set in fixture, but being explicit)
     mock_redis.ping = AsyncMock(return_value=True)
 
     # Mock Worker (heartbeat < 90s)
@@ -53,8 +66,6 @@ async def test_readiness_endpoint_success(mock_redis, mock_engine, client):
 
 
 @pytest.mark.asyncio
-@patch("src.main.engine")
-@patch("src.main.redis_pool")
 async def test_readiness_endpoint_db_failure(mock_redis, mock_engine, client):
     """Verify readiness probe returns 503 when Database is down."""
     # Database fails
@@ -72,8 +83,6 @@ async def test_readiness_endpoint_db_failure(mock_redis, mock_engine, client):
 
 
 @pytest.mark.asyncio
-@patch("src.main.engine")
-@patch("src.main.redis_pool")
 async def test_readiness_endpoint_redis_failure(mock_redis, mock_engine, client):
     """Verify readiness probe returns 503 when Redis is down."""
     # Database is OK
@@ -92,8 +101,6 @@ async def test_readiness_endpoint_redis_failure(mock_redis, mock_engine, client)
 
 
 @pytest.mark.asyncio
-@patch("src.main.engine")
-@patch("src.main.redis_pool")
 async def test_readiness_endpoint_worker_failure_stale(mock_redis, mock_engine, client):
     """Verify readiness probe returns 503 when worker heartbeat is stale."""
     # Database and Redis are OK
@@ -112,8 +119,6 @@ async def test_readiness_endpoint_worker_failure_stale(mock_redis, mock_engine, 
 
 
 @pytest.mark.asyncio
-@patch("src.main.engine")
-@patch("src.main.redis_pool")
 async def test_readiness_endpoint_worker_failure_missing(mock_redis, mock_engine, client):
     """Verify readiness probe returns 503 when worker heartbeat is missing."""
     # Database and Redis are OK
