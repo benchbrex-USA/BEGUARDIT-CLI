@@ -32,8 +32,8 @@ export default class AiRagCollector extends BaseCollector {
     for (const db of vectorDbs) {
       const running = this.exec(
         process.platform === 'win32'
-          ? `tasklist /FI "IMAGENAME eq ${db.process}*" 2>nul`
-          : `pgrep -la "${db.process}" 2>/dev/null`,
+          ? `tasklist /FI ${this.quote(`IMAGENAME eq ${db.process}*`)} 2>nul`
+          : `pgrep -la ${this.quote(db.process)} 2>/dev/null`,
       );
       if (running && !running.includes('INFO: No tasks')) {
         detectedDbs.push({
@@ -115,13 +115,13 @@ export default class AiRagCollector extends BaseCollector {
       'chroma_config', 'qdrant_config', 'vector_store', 'vectorstore',
       'embeddings', 'embedding_model', 'OPENAI_API_KEY', 'PINECONE_API_KEY',
     ];
-    const patternArgs = configPatterns.map((p) => `-e "${p}"`).join(' ');
+    const patternArgs = configPatterns.map((p) => `-e ${this.quote(p)}`).join(' ');
     const configFiles = [];
 
     for (const root of searchRoots) {
       if (!existsSync(root)) continue;
       const found = this.exec(
-        `grep -rl ${patternArgs} "${root}" --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" --include="*.env" 2>/dev/null | head -30`,
+        `grep -rl ${patternArgs} ${this.quote(root)} --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" --include="*.env" 2>/dev/null | head -30`,
       );
       if (found) {
         for (const filePath of found.split('\n').filter(Boolean)) {
@@ -142,7 +142,7 @@ export default class AiRagCollector extends BaseCollector {
       if (!existsSync(root)) continue;
       for (const dirName of dataDirNames) {
         const found = this.exec(
-          `find "${root}" -maxdepth 4 -type d -name "${dirName}" 2>/dev/null | head -10`,
+          `find ${this.quote(root)} -maxdepth 4 -type d -name ${this.quote(dirName)} 2>/dev/null | head -10`,
         );
         if (found) {
           for (const dir of found.split('\n').filter(Boolean)) {

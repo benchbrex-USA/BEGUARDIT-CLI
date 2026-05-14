@@ -42,6 +42,18 @@ export default class BaseCollector {
   // ---------------------------------------------------------------------------
 
   /**
+   * Quote a string for use in a shell command.
+   * @param {string} val
+   * @returns {string}
+   */
+  quote(val) {
+    if (process.platform === 'win32') {
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }
+    return `'${String(val).replace(/'/g, "'\\''")}'`;
+  }
+
+  /**
    * Run a shell command and return stdout, or null on failure.
    * @param {string} cmd
    * @param {object} [opts]
