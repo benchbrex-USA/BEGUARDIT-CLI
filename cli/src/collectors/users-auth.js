@@ -94,7 +94,7 @@ export default class UsersAuthCollector extends BaseCollector {
     // ── Authorized keys ─────────────────────────────────────────────
     const authKeysPath = join(sshDir, 'authorized_keys');
     if (existsSync(authKeysPath)) {
-      const authKeys = this.exec(`wc -l < "${authKeysPath}" 2>/dev/null`);
+      const authKeys = this.exec(`wc -l < ${this.quote(authKeysPath)} 2>/dev/null`);
       evidence.push(this.evidence('authorized_keys', {
         path: authKeysPath,
         key_count: parseInt(authKeys, 10) || 0,

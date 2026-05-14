@@ -46,7 +46,7 @@ export default class AiModelsCollector extends BaseCollector {
       if (!existsSync(searchPath)) continue;
 
       const found = this.exec(
-        `find "${searchPath}" -maxdepth 5 \\( ${extGlob} \\) -type f 2>/dev/null | head -100`,
+        `find ${this.quote(searchPath)} -maxdepth 5 \\( ${extGlob} \\) -type f 2>/dev/null | head -100`,
       );
       if (!found) continue;
 
@@ -85,7 +85,7 @@ export default class AiModelsCollector extends BaseCollector {
     // ── Hugging Face cache metadata ─────────────────────────────────
     const hfCache = join(homedir(), '.cache', 'huggingface', 'hub');
     if (existsSync(hfCache)) {
-      const repos = this.exec(`ls -d "${hfCache}"/models--* 2>/dev/null`);
+      const repos = this.exec(`ls -d ${this.quote(hfCache)}/models--* 2>/dev/null`);
       if (repos) {
         const hfModels = repos.split('\n').filter(Boolean).map((dir) => {
           const name = dir.split('models--').pop()?.replace(/--/g, '/');

@@ -121,7 +121,7 @@ export default class AiRagCollector extends BaseCollector {
     for (const root of searchRoots) {
       if (!existsSync(root)) continue;
       const found = this.exec(
-        `grep -rl ${patternArgs} "${root}" --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" --include="*.env" 2>/dev/null | head -30`,
+        `grep -rl ${patternArgs} ${this.quote(root)} --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" --include="*.env" 2>/dev/null | head -30`,
       );
       if (found) {
         for (const filePath of found.split('\n').filter(Boolean)) {
@@ -142,7 +142,7 @@ export default class AiRagCollector extends BaseCollector {
       if (!existsSync(root)) continue;
       for (const dirName of dataDirNames) {
         const found = this.exec(
-          `find "${root}" -maxdepth 4 -type d -name "${dirName}" 2>/dev/null | head -10`,
+          `find ${this.quote(root)} -maxdepth 4 -type d -name "${dirName}" 2>/dev/null | head -10`,
         );
         if (found) {
           for (const dir of found.split('\n').filter(Boolean)) {
