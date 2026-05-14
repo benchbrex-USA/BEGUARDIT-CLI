@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 from unittest import mock
 
-import pytest
 
 from src.config import WorkerConfig, get_config
 

@@ -96,8 +96,10 @@ class TenantScopingMiddleware(BaseHTTPMiddleware):
                         row = (
                             await session.execute(
                                 text(
-                                    "SELECT user_id, tenant_id, expires_at "
-                                    "FROM sessions WHERE token_hash = :th"
+                                    "SELECT s.user_id, s.tenant_id, s.expires_at "
+                                    "FROM sessions s "
+                                    "JOIN tenants t ON s.tenant_id = t.id "
+                                    "WHERE s.token_hash = :th AND t.deleted_at IS NULL"
                                 ),
                                 {"th": token_hash},
                             )

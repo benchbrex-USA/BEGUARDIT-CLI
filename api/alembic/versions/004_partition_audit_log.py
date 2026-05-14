@@ -2,14 +2,14 @@
 # Source: ARCH-002-2026-03-17, Fix 6 (Audit Log Partitioning)
 from __future__ import annotations
 
+from alembic import op
+
 """Partition audit_log table by created_at (monthly ranges)
 
 Revision ID: d4e5f6a7b8c9
 Revises: a1b2c3d4e5f6
 Create Date: 2026-03-18
 """
-
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d4e5f6a7b8c9"

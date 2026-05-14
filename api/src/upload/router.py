@@ -82,10 +82,12 @@ async def upload_assessment(
         raise ValidationError(f"Report validation failed: {exc}")
 
     # ── Concurrent scan prevention (Fix 10) ───────────────────────
+    import secrets
+    lock_token = secrets.token_hex(16)
     hostname = report.hostname or "unknown"
     lock_key = f"beguardit:scan_lock:{session.tenant_id}:{hostname}"
 
-    acquired = await redis.set(lock_key, "1", nx=True, ex=_SCAN_LOCK_TTL_SECONDS)
+    acquired = await redis.set(lock_key, lock_token, nx=True, ex=_SCAN_LOCK_TTL_SECONDS)
     if not acquired:
         raise ConflictError(
             f"A scan is already running for hostname '{hostname}' in this tenant. "
@@ -101,7 +103,15 @@ async def upload_assessment(
             raw_body=raw_body,
         )
     finally:
-        # Release the lock after import completes (success or failure)
-        await redis.delete(lock_key)
+        # Release the lock using a Lua script to ensure atomicity and that we
+        # only delete the lock if it still matches our unique token.
+        lua_release = """
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+                return redis.call("del", KEYS[1])
+            else
+                return 0
+            end
+        """
+        await redis.eval(lua_release, 1, lock_key, lock_token)
 
     return UploadResponse(**result)

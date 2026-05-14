@@ -85,14 +85,14 @@ class TestCreateReportJob:
         db.execute = AsyncMock(side_effect=results)
 
         # Mock the job object that gets created
-        mock_job = _make_report_job(tenant_id=tenant_id, session_id=session_id)
+        _make_report_job(tenant_id=tenant_id, session_id=session_id)
         db.refresh = AsyncMock(return_value=None)
 
         # Mock ARQ pool
         arq_pool = AsyncMock()
         mock_pool.return_value = arq_pool
 
-        job = await create_report_job(
+        await create_report_job(
             db, tenant_id=tenant_id, session_id=session_id, format="html"
         )
 

@@ -18,10 +18,12 @@ from arq.connections import RedisSettings
 from arq.cron import cron
 
 from src.config import get_config
+from src.jobs.data_export import export_tenant_data
 from src.jobs.partition_maintenance import partition_maintenance
 from src.jobs.report_html import generate_html_report
 from src.jobs.report_pdf import generate_pdf_report
 from src.jobs.report_sarif import generate_sarif_export
+from src.jobs.tenant_cleanup import cleanup_deleted_tenants
 
 logger = structlog.get_logger()
 
@@ -107,6 +109,8 @@ class WorkerSettings:
         generate_pdf_report,
         generate_sarif_export,
         partition_maintenance,
+        export_tenant_data,
+        cleanup_deleted_tenants,
     ]
 
     # Cron jobs
@@ -118,6 +122,13 @@ class WorkerSettings:
             day={1},
             hour={3},
             minute={0},
+            unique=True,
+        ),
+        # Tenant cleanup — daily at 02:00 UTC
+        cron(
+            cleanup_deleted_tenants,
+            hour=2,
+            minute=0,
             unique=True,
         ),
         # Worker heartbeat — every 30 seconds
